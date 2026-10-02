@@ -13,6 +13,7 @@ public enum MatchState : byte
 
 public sealed class NetworkMatchManager : NetworkBehaviour
 {
+    public const int MaximumPlayers = 80;
     public const float TotalBattleDurationSeconds = 22f * 60f;
     public const float SafeZoneShrinkStartSeconds = 12f * 60f;
     public const float SafeZoneShrinkDurationSeconds = 10f * 60f;
@@ -56,10 +57,13 @@ public sealed class NetworkMatchManager : NetworkBehaviour
         NetworkVariableReadPermission.Everyone,
         NetworkVariableWritePermission.Server);
 
-    private readonly List<NetworkPlayer> players = new();
+    private readonly List<NetworkPlayer> players = new(MaximumPlayers);
     private readonly Dictionary<string, ReturningProfile> returningProfiles = new(StringComparer.OrdinalIgnoreCase);
     private float stateElapsed;
     private float matchElapsed;
+
+    public int ActivePlayerCount => players.Count;
+    public IReadOnlyList<NetworkPlayer> ActivePlayers => players;
 
     public override void OnNetworkSpawn()
     {
@@ -123,6 +127,12 @@ public sealed class NetworkMatchManager : NetworkBehaviour
             return;
         }
 
+        if (players.Count >= MaximumPlayers || (IsMatchActive && !CanAcceptMidMatchJoinServer()))
+        {
+            NetworkManager.DisconnectClient(player.OwnerClientId);
+            return;
+        }
+
         players.Add(player);
         if (CurrentState.Value == MatchState.WaitingForPlayers)
         {
@@ -149,6 +159,8 @@ public sealed class NetworkMatchManager : NetworkBehaviour
         return IsServer && (CurrentState.Value == MatchState.BattleStarted || CurrentState.Value == MatchState.SafeZoneShrinking) && MatchTimeRemaining.Value > 0f && MatchTimeRemaining.Value <= MidMatchJoinRemainingSeconds;
     }
 
+    public bool IsMatchActive => CurrentState.Value == MatchState.BattleStarted || CurrentState.Value == MatchState.SafeZoneShrinking;
+
     public void ProcessSessionServer(PlayerSessionManager session, string requestedName, MatchJoinPreference preference)
     {
         if (!IsServer || session == null)
@@ -162,8 +174,7 @@ public sealed class NetworkMatchManager : NetworkBehaviour
             normalizedName = normalizedName.Substring(0, 48);
         }
 
-        bool matchStarted = CurrentState.Value == MatchState.BattleStarted || CurrentState.Value == MatchState.SafeZoneShrinking;
-        if (matchStarted && !CanAcceptMidMatchJoinServer())
+        if (IsMatchActive && !CanAcceptMidMatchJoinServer())
         {
             session.SetRejected("Mid-match joining is available only with 12 minutes or less remaining");
             NetworkManager.DisconnectClient(session.OwnerClientId);
@@ -227,7 +238,7 @@ public sealed class NetworkMatchManager : NetworkBehaviour
             return;
         }
 
-        int campIndex = Mathf.Abs(playerIndex) % teamCamps.Length;
+        int campIndex = FindLeastPopulatedCampIndex();
         AssignToTeamAndSpawn(player, teamCamps[campIndex].teamId, playerIndex);
     }
 
@@ -246,10 +257,52 @@ public sealed class NetworkMatchManager : NetworkBehaviour
 
         TeamCamp camp = teamCamps[campIndex];
         Transform[] spawnPoints = camp.spawnPoints;
+        int spawnIndex = GetNextSpawnIndex(camp.teamId, spawnPoints != null ? spawnPoints.Length : 0);
         Transform spawnPoint = spawnPoints != null && spawnPoints.Length > 0
-            ? spawnPoints[Mathf.Abs(fallbackIndex) % spawnPoints.Length]
+            ? spawnPoints[spawnIndex]
             : null;
         player.SetTeamAndSpawnServer(teamId, spawnPoint);
+    }
+
+    private int FindLeastPopulatedCampIndex()
+    {
+        int selectedIndex = 0;
+        int lowestCount = int.MaxValue;
+        for (int campIndex = 0; campIndex < teamCamps.Length; campIndex++)
+        {
+            int population = CountTeamMembers(teamCamps[campIndex].teamId);
+            if (population < lowestCount)
+            {
+                lowestCount = population;
+                selectedIndex = campIndex;
+            }
+        }
+
+        return selectedIndex;
+    }
+
+    private int GetNextSpawnIndex(int teamId, int spawnPointCount)
+    {
+        if (spawnPointCount <= 0)
+        {
+            return 0;
+        }
+
+        return CountTeamMembers(teamId) % spawnPointCount;
+    }
+
+    private int CountTeamMembers(int teamId)
+    {
+        int count = 0;
+        foreach (NetworkPlayer player in players)
+        {
+            if (player != null && player.TeamId.Value == teamId)
+            {
+                count++;
+            }
+        }
+
+        return count;
     }
 
     private bool IsConfiguredTeam(int teamId)

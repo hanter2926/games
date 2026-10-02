@@ -17,6 +17,7 @@ public sealed class PlayerCampGuard : NetworkBehaviour
     [SerializeField] private string guardAnimatorParameter = "IsOnGuardDuty";
     [Min(0f)] [SerializeField] private float guardAlertRadius = 35f;
     [SerializeField] private LayerMask guardAlertLayer = ~0;
+    [SerializeField] private NetworkMatchManager matchManager;
     public UnityEvent guardDutyStarted;
     public UnityEvent guardDutyStopped;
     public UnityEvent guardAlertRaised;
@@ -40,6 +41,7 @@ public sealed class PlayerCampGuard : NetworkBehaviour
     {
         survival = survival != null ? survival : GetComponent<PlayerSurvival>();
         controller = controller != null ? controller : GetComponent<PlayerController>();
+        matchManager = matchManager != null ? matchManager : FindObjectOfType<NetworkMatchManager>();
     }
 
     public override void OnNetworkSpawn()
@@ -124,18 +126,29 @@ public sealed class PlayerCampGuard : NetworkBehaviour
             return;
         }
 
+        if (matchManager == null)
+        {
+            matchManager = FindObjectOfType<NetworkMatchManager>();
+        }
+
         NetworkPlayer ownPlayer = GetComponent<NetworkPlayer>();
         bool enemyNearby = false;
-        Collider[] nearbyColliders = Physics.OverlapSphere(transform.position, guardAlertRadius, guardAlertLayer, QueryTriggerInteraction.Ignore);
-        foreach (Collider nearbyCollider in nearbyColliders)
+        if (matchManager == null)
         {
-            NetworkPlayer nearbyPlayer = nearbyCollider.GetComponentInParent<NetworkPlayer>();
+            return;
+        }
+
+        float alertRadiusSquared = guardAlertRadius * guardAlertRadius;
+        foreach (NetworkPlayer nearbyPlayer in matchManager.ActivePlayers)
+        {
             if (nearbyPlayer == null || nearbyPlayer == ownPlayer || !nearbyPlayer.IsSpawned)
             {
                 continue;
             }
 
-            if (ownPlayer == null || nearbyPlayer.TeamId.Value != ownPlayer.TeamId.Value)
+            Vector3 offset = nearbyPlayer.transform.position - transform.position;
+            offset.y = 0f;
+            if (offset.sqrMagnitude <= alertRadiusSquared && (ownPlayer == null || nearbyPlayer.TeamId.Value != ownPlayer.TeamId.Value))
             {
                 enemyNearby = true;
                 break;

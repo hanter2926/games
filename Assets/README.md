@@ -187,6 +187,15 @@ This integration uses **Netcode for GameObjects (NGO)** with Unity Transport.
 5. If the previous team no longer exists, the server safely falls back to solo. If the 12-minute condition is not met, the server rejects the session and disconnects the client.
 6. The profile currently uses player name for local integration. Replace it with an authenticated account ID before production deployment so users cannot impersonate returning players by typing the same name.
 
+## 20. 50-80 player optimization and setup
+
+1. `NetworkMatchManager.MaximumPlayers` is fixed at 80. Set the NGO connection approval limit to 80 as well so excess clients are rejected before gameplay objects are created.
+2. Configure enough Team Camps and spawn points for the intended population. The manager chooses the least-populated camp for new solo players and cycles spawn points within the selected camp; returning players use their previous configured team.
+3. Keep team camp spawn arrays longer than the expected camp population. Spawn points may be reused after the array is exhausted, so place additional points to avoid overlapping players.
+4. The manager exposes `ActivePlayers` and `ActivePlayerCount`. Safe-zone damage, guard alerts, and wildlife target selection use this capped registry instead of repeated global scene searches.
+5. Keep server-only work in the server branches: health, economy, cooking, delivery immunity, hospital treatment, safe-zone damage, animal AI, team assignment, and mid-match admission. Clients should only submit input/request RPCs and render replicated state.
+6. Profile the server with the Unity Profiler and Network Profiler using 50-80 simulated clients. Test join rejection above 80, join rejection with more than 12 minutes remaining, solo joins at 12 minutes, and returning-team joins during both active match phases.
+
 ## 15. Safe zone and guard alert setup
 
 1. Add `SafeZoneManager` and `NetworkObject` to a persistent battle-scene object positioned at the zone center. Assign `NetworkMatchManager` and a circular ring/cylinder visual.

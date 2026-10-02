@@ -11,6 +11,7 @@ Create these scenes in the Unity Editor and add both to Build Settings:
 5. Create MenuPanel controls for address, port, player name, `Join previous team` Toggle, Host Game, Join Game, and Exit. Assign the player-name InputField and Toggle to MainMenuManager.
 6. Create a disabled LobbyPanel with a connection status Text. Assign all references to MainMenuManager.
 7. Add the PlayerPrefab to NetworkManager > Player Prefab and Network Prefabs. It must include PlayerSessionManager.
+8. Set NGO connection approval/max-player policy to 80. Configure NetworkMatchManager Team Camps with enough spawn points for the desired 50-80 player population.
 
 ## BattleScene.unity
 

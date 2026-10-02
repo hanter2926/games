@@ -23,6 +23,7 @@ public sealed class WildAnimalAI : NetworkBehaviour
         NetworkVariableWritePermission.Server);
 
     private DayNightCycleManager cycleManager;
+    private NetworkMatchManager matchManager;
     private NavMeshAgent agent;
     private NetworkPlayer target;
     private float targetRefreshTimer;
@@ -31,6 +32,7 @@ public sealed class WildAnimalAI : NetworkBehaviour
     private void Awake()
     {
         agent = GetComponent<NavMeshAgent>();
+        matchManager = FindObjectOfType<NetworkMatchManager>();
     }
 
     public void InitializeServer(DayNightCycleManager manager)
@@ -106,11 +108,20 @@ public sealed class WildAnimalAI : NetworkBehaviour
 
     private NetworkPlayer FindBestTarget()
     {
-        NetworkPlayer[] players = FindObjectsOfType<NetworkPlayer>();
+        if (matchManager == null)
+        {
+            matchManager = FindObjectOfType<NetworkMatchManager>();
+        }
+
+        if (matchManager == null)
+        {
+            return null;
+        }
+
         NetworkPlayer bestTarget = null;
         float bestScore = float.MaxValue;
 
-        foreach (NetworkPlayer player in players)
+        foreach (NetworkPlayer player in matchManager.ActivePlayers)
         {
             if (player == null || !player.IsSpawned)
             {

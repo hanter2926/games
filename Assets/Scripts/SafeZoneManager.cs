@@ -54,12 +54,16 @@ public sealed class SafeZoneManager : NetworkBehaviour
 
     private void DamagePlayersOutsideZone(float radius)
     {
-        NetworkPlayer[] players = FindObjectsOfType<NetworkPlayer>();
+        if (matchManager == null)
+        {
+            return;
+        }
+
         Vector3 center = transform.position;
         float radiusSquared = radius * radius;
         float damage = Mathf.Max(0f, zoneDamagePerSecond) * damageTimer;
 
-        foreach (NetworkPlayer player in players)
+        foreach (NetworkPlayer player in matchManager.ActivePlayers)
         {
             if (player == null || !player.IsSpawned || !IsOutside(player.transform.position, center, radiusSquared))
             {
