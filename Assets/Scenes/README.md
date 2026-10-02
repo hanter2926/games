@@ -17,9 +17,12 @@ Create these scenes in the Unity Editor and add both to Build Settings:
 1. Create the terrain, safe-zone center, cover, and lighting.
 2. Add one or more camp trigger objects with a Collider set to Is Trigger and the `CampArea` component. Set recovery rates and the `CampArea` tag.
 3. Create team spawn-point Transforms and assign them to the matching Team Camps on NetworkMatchManager in the bootstrap scene.
-4. Add a Screen Space - Overlay Canvas with `GameHUD`.
-5. Create HealthSlider, EnergySlider, TeamCampStatusText, GuardStatusText, and MatchStatusText. Assign them to GameHUD.
-6. Add Eat, Guard, Laugh, Speak, Bye, and Fire Buttons. Assign them to GameHUD. GameHUD resolves the local NetworkPlayerCombat after spawn and routes the Fire button to NetworkPlayerCombat.Fire.
-7. Keep the gameplay scene in the NGO Scene Management list. The host loads it when NetworkMatchManager enters BattleStarted; clients follow automatically.
+4. Add `SafeZoneManager` and `NetworkObject` at the safe-zone center. Assign a ring/cylinder visual, configure damage per second, and ensure it exists as a networked scene object.
+5. Create Hospital trigger volumes on the `Hospital` layer and place safe respawn markers with the `HospitalSpawn` tag.
+6. Add a Screen Space - Overlay Canvas with `GameHUD`.
+7. Create HealthSlider, EnergySlider, StaminaSlider, HungerSlider, TeamCampStatusText, GuardStatusText, MatchStatusText, MoneyText, MedicalKitsText, and DeliveryStatusText. Assign them to GameHUD.
+8. Add Eat, Guard, Laugh, Speak, Bye, Fire, Cook Meal, Order Meal, Order Medical Kit, Hospital, Medical Kit, Accept Delivery, and Complete Delivery Buttons. Assign them to GameHUD.
+9. Assign `NetworkPlayerCombat.muzzleFlash` and an optional crosshair `hitMarker` on PlayerPrefab. Assign `PlayerCampGuard.guardAlertRaised` and `guardAlertCleared` to the alert UI/audio callbacks.
+10. Keep the gameplay scene in the NGO Scene Management list. The host loads it when NetworkMatchManager enters BattleStarted; clients follow automatically.
 
 Do not place a second NetworkManager or a second persistent NetworkMatchManager in BattleScene. The bootstrap manager persists across the NGO scene transition.

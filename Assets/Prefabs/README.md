@@ -13,6 +13,7 @@ Create `PlayerPrefab` from a root GameObject with these components:
 - PlayerSocialInteractions
 - NetworkPlayer
 - NetworkPlayerCombat
+- DeliveryAndHospitalSystem
 
 The scripts add required components automatically, but keep exactly one NetworkObject and one NetworkTransform on the root.
 
@@ -22,6 +23,7 @@ Create these child objects:
 - `GuardIndicator`: disabled mesh, light, or world-space icon. Assign it to PlayerCampGuard.
 - `Muzzle`: weapon muzzle Transform. Assign it to NetworkPlayerCombat.
 - `OwnerCamera`: camera used only by the owning client. Assign it to NetworkPlayerCombat.ownerCamera.
+- `MedicalKitSocket` (optional): visual location for a medical bag or kit pickup.
 
 Assign the Animator to PlayerCampGuard and PlayerSocialInteractions. Add Animator parameters:
 
@@ -30,7 +32,15 @@ Assign the Animator to PlayerCampGuard and PlayerSocialInteractions. Add Animato
 - `Speak` Trigger
 - `Wave` Trigger
 - `Fire` Trigger
+- `Drive` Bool or Trigger
+- `Deliver` Trigger
 
 Set NetworkTransform to owner/client authority when supported by the installed NGO version. Register the prefab in NetworkManager > Network Prefabs and set it as Player Prefab.
+
+Assign `NetworkPlayerCombat.muzzleFlash` to a ParticleSystem under `Muzzle`, and assign a disabled crosshair UI object to `hitMarker` if hit feedback is desired. Assign `PlayerCampGuard.guardIndicator`, `guardAlertRaised`, and `guardAlertCleared` to the guard visual and alert HUD/audio callbacks.
+
+Assign `DeliveryAndHospitalSystem.hospitalZoneLayer`, configure prices and healing values, and use a `Hospital` layer on clinic trigger colliders. Delivery roles must be assigned by server-side code through `AssignDeliveryBoyServer`.
+
+For a delivery vehicle prefab, add a NetworkObject, NetworkTransform, vehicle collider, driver anchor, and an Animator with `Drive` and `Deliver`. A delivery bag can be a child of the player or vehicle; play `Deliver` when `CompleteDelivery` succeeds.
 
 For mobile movement, assign the virtual joystick component to PlayerController.mobileJoystick. The concrete joystick type must match the joystick package installed in the project.

@@ -7,6 +7,7 @@ using UnityEngine;
 [RequireComponent(typeof(PlayerController))]
 [RequireComponent(typeof(PlayerSurvival))]
 [RequireComponent(typeof(PlayerCampGuard))]
+[RequireComponent(typeof(DeliveryAndHospitalSystem))]
 public sealed class NetworkPlayer : NetworkBehaviour
 {
     [Header("Local Components")]
@@ -75,6 +76,11 @@ public sealed class NetworkPlayer : NetworkBehaviour
                 {
                     camp.Recover(survival, Time.deltaTime);
                 }
+            }
+
+            if (campGuard.IsOnGuardDuty)
+            {
+                campGuard.EvaluateGuardAlert();
             }
 
         }

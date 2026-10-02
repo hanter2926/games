@@ -8,9 +8,13 @@ public sealed class GameHUD : MonoBehaviour
     [SerializeField] private Slider healthSlider;
     [SerializeField] private Slider energySlider;
     [SerializeField] private Slider staminaSlider;
+    [SerializeField] private Slider hungerSlider;
     [SerializeField] private Text teamCampStatusText;
     [SerializeField] private Text guardStatusText;
     [SerializeField] private Text matchStatusText;
+    [SerializeField] private Text moneyText;
+    [SerializeField] private Text deliveryStatusText;
+    [SerializeField] private Text medicalKitsText;
 
     [Header("Action Buttons")]
     [SerializeField] private Button eatFoodButton;
@@ -19,6 +23,13 @@ public sealed class GameHUD : MonoBehaviour
     [SerializeField] private Button speakButton;
     [SerializeField] private Button byeButton;
     [SerializeField] private Button fireButton;
+    [SerializeField] private Button cookMealButton;
+    [SerializeField] private Button orderMealButton;
+    [SerializeField] private Button orderMedicalKitButton;
+    [SerializeField] private Button hospitalButton;
+    [SerializeField] private Button medicalKitButton;
+    [SerializeField] private Button acceptDeliveryButton;
+    [SerializeField] private Button completeDeliveryButton;
     [SerializeField] private float foodAmount = 50f;
 
     private NetworkPlayer localPlayer;
@@ -27,6 +38,7 @@ public sealed class GameHUD : MonoBehaviour
     private PlayerCampGuard localCampGuard;
     private PlayerSocialInteractions localSocial;
     private NetworkPlayerCombat localCombat;
+    private DeliveryAndHospitalSystem localDelivery;
     private NetworkMatchManager matchManager;
 
     private void OnEnable()
@@ -37,6 +49,13 @@ public sealed class GameHUD : MonoBehaviour
         speakButton?.onClick.AddListener(Speak);
         byeButton?.onClick.AddListener(WaveBye);
         fireButton?.onClick.AddListener(Fire);
+        cookMealButton?.onClick.AddListener(CookMeal);
+        orderMealButton?.onClick.AddListener(OrderMeal);
+        orderMedicalKitButton?.onClick.AddListener(OrderMedicalKit);
+        hospitalButton?.onClick.AddListener(RequestHospitalTreatment);
+        medicalKitButton?.onClick.AddListener(UseMedicalKit);
+        acceptDeliveryButton?.onClick.AddListener(AcceptDelivery);
+        completeDeliveryButton?.onClick.AddListener(CompleteDelivery);
     }
 
     private void OnDisable()
@@ -47,6 +66,13 @@ public sealed class GameHUD : MonoBehaviour
         speakButton?.onClick.RemoveListener(Speak);
         byeButton?.onClick.RemoveListener(WaveBye);
         fireButton?.onClick.RemoveListener(Fire);
+        cookMealButton?.onClick.RemoveListener(CookMeal);
+        orderMealButton?.onClick.RemoveListener(OrderMeal);
+        orderMedicalKitButton?.onClick.RemoveListener(OrderMedicalKit);
+        hospitalButton?.onClick.RemoveListener(RequestHospitalTreatment);
+        medicalKitButton?.onClick.RemoveListener(UseMedicalKit);
+        acceptDeliveryButton?.onClick.RemoveListener(AcceptDelivery);
+        completeDeliveryButton?.onClick.RemoveListener(CompleteDelivery);
         UnbindMatchManager();
     }
 
@@ -93,6 +119,44 @@ public sealed class GameHUD : MonoBehaviour
         localCombat?.Fire();
     }
 
+    public void CookMeal()
+    {
+        localDelivery?.CookMeal();
+    }
+
+    public void OrderMeal()
+    {
+        localDelivery?.OrderDelivery(DeliveryItemType.CookedMeal);
+    }
+
+    public void OrderMedicalKit()
+    {
+        localDelivery?.OrderDelivery(DeliveryItemType.MedicalKit);
+    }
+
+    public void RequestHospitalTreatment()
+    {
+        localDelivery?.RequestHospitalTreatment();
+    }
+
+    public void UseMedicalKit()
+    {
+        localDelivery?.UseMedicalKit();
+    }
+
+    public void AcceptDelivery()
+    {
+        if (localDelivery != null)
+        {
+            localDelivery.AcceptDelivery(localDelivery.ActiveOrderId.Value);
+        }
+    }
+
+    public void CompleteDelivery()
+    {
+        localDelivery?.CompleteDelivery();
+    }
+
     private void TryBindLocalPlayer()
     {
         NetworkManager networkManager = NetworkManager.Singleton;
@@ -112,6 +176,7 @@ public sealed class GameHUD : MonoBehaviour
         localCampGuard = localPlayer != null ? localPlayer.GetComponent<PlayerCampGuard>() : null;
         localSocial = localPlayer != null ? localPlayer.GetComponent<PlayerSocialInteractions>() : null;
         localCombat = localPlayer != null ? localPlayer.GetComponent<NetworkPlayerCombat>() : null;
+        localDelivery = localPlayer != null ? localPlayer.GetComponent<DeliveryAndHospitalSystem>() : null;
     }
 
     private void TryBindMatchManager()
@@ -152,6 +217,26 @@ public sealed class GameHUD : MonoBehaviour
             {
                 energySlider.value = localSurvival.currentEnergy / localSurvival.maxEnergy;
             }
+
+            if (hungerSlider != null && localSurvival.maxHunger > 0f)
+            {
+                hungerSlider.value = localSurvival.currentHunger / localSurvival.maxHunger;
+            }
+
+            if (moneyText != null)
+            {
+                moneyText.text = "$" + localSurvival.CurrentMoney;
+            }
+
+            if (medicalKitsText != null)
+            {
+                medicalKitsText.text = "Medical kits: " + localSurvival.CurrentMedicalKits;
+            }
+        }
+
+        if (localDelivery != null && deliveryStatusText != null)
+        {
+            deliveryStatusText.text = localDelivery.DeliveryStatus.Value.ToString();
         }
 
         if (localController != null && staminaSlider != null && localController.maxStamina > 0f)

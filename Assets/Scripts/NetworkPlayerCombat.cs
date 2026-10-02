@@ -1,5 +1,6 @@
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.Events;
 
 [RequireComponent(typeof(NetworkObject))]
 public sealed class NetworkPlayerCombat : NetworkBehaviour
@@ -12,6 +13,10 @@ public sealed class NetworkPlayerCombat : NetworkBehaviour
     [SerializeField] private LayerMask hitMask = ~0;
     [SerializeField] private string fireTrigger = "Fire";
     [SerializeField] private Animator animator;
+    [SerializeField] private ParticleSystem muzzleFlash;
+    [SerializeField] private GameObject hitMarker;
+    [SerializeField] private float hitMarkerDuration = 0.12f;
+    public UnityEvent hitConfirmed;
 
 
     public void Fire()
@@ -35,16 +40,29 @@ public sealed class NetworkPlayerCombat : NetworkBehaviour
             return;
         }
 
+        bool hitConfirmedOnServer = false;
         if (Physics.Raycast(origin, direction, out RaycastHit hit, range, hitMask, QueryTriggerInteraction.Ignore))
         {
             NetworkPlayer target = hit.collider.GetComponentInParent<NetworkPlayer>();
             if (target != null && target != GetComponent<NetworkPlayer>())
             {
                 target.ApplyDamageServer(damage);
+                hitConfirmedOnServer = true;
             }
         }
 
         PlayFireClientRpc();
+        if (hitConfirmedOnServer)
+        {
+            PlayMuzzleFlashClientRpc();
+            PlayHitMarkerClientRpc(new ClientRpcParams
+            {
+                Send = new ClientRpcSendParams
+                {
+                    TargetClientIds = new[] { OwnerClientId }
+                }
+            });
+        }
     }
 
     [ClientRpc]
@@ -54,5 +72,31 @@ public sealed class NetworkPlayerCombat : NetworkBehaviour
         {
             animator.SetTrigger(fireTrigger);
         }
+    }
+
+    [ClientRpc]
+    private void PlayMuzzleFlashClientRpc()
+    {
+        if (muzzleFlash != null)
+        {
+            muzzleFlash.Play();
+        }
+    }
+
+    [ClientRpc]
+    private void PlayHitMarkerClientRpc(ClientRpcParams clientRpcParams = default)
+    {
+        hitConfirmed?.Invoke();
+        if (hitMarker != null)
+        {
+            StartCoroutine(ShowHitMarker());
+        }
+    }
+
+    private System.Collections.IEnumerator ShowHitMarker()
+    {
+        hitMarker.SetActive(true);
+        yield return new WaitForSeconds(Mathf.Max(0f, hitMarkerDuration));
+        hitMarker.SetActive(false);
     }
 }

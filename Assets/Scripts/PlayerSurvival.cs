@@ -14,7 +14,11 @@ public class PlayerSurvival : NetworkBehaviour
     public float maxEnergy = 100f;
     public float currentEnergy;
     public float energyDrainRate = 2f; // Har second kitni energy kam hogi
-    public float hungerThreshold = 20f; // Jab isse kam energy ho toh warning milegi
+    [Min(1f)] public float maxHunger = 100f;
+    public float currentHunger;
+    [Min(0f)] public float hungerDrainPerSecond = 0.5f;
+    [Min(0f)] public float starvationDamagePerSecond = 5f;
+    public float hungerThreshold = 20f;
     private bool starvingWarningShown;
 
     public NetworkVariable<float> NetworkHealth = new(
@@ -23,6 +27,22 @@ public class PlayerSurvival : NetworkBehaviour
         NetworkVariableWritePermission.Server);
     public NetworkVariable<float> NetworkEnergy = new(
         100f,
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server);
+    public NetworkVariable<float> NetworkHunger = new(
+        100f,
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server);
+    public NetworkVariable<int> NetworkMoney = new(
+        250,
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server);
+    public NetworkVariable<int> NetworkMedicalKits = new(
+        0,
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server);
+    public NetworkVariable<bool> NetworkIsDowned = new(
+        false,
         NetworkVariableReadPermission.Everyone,
         NetworkVariableWritePermission.Server);
 
@@ -36,6 +56,7 @@ public class PlayerSurvival : NetworkBehaviour
     {
         currentHealth = maxHealth;
         currentEnergy = maxEnergy;
+        currentHunger = maxHunger;
         RefreshUI();
     }
 
@@ -44,15 +65,20 @@ public class PlayerSurvival : NetworkBehaviour
         NetworkAuthorityControlled = true;
         NetworkHealth.OnValueChanged += OnNetworkHealthChanged;
         NetworkEnergy.OnValueChanged += OnNetworkEnergyChanged;
+        NetworkHunger.OnValueChanged += OnNetworkHungerChanged;
 
         if (IsServer)
         {
             NetworkHealth.Value = maxHealth;
             NetworkEnergy.Value = maxEnergy;
+            NetworkHunger.Value = maxHunger;
+            NetworkMoney.Value = 250;
+            NetworkMedicalKits.Value = 0;
         }
 
         currentHealth = NetworkHealth.Value;
         currentEnergy = NetworkEnergy.Value;
+        currentHunger = NetworkHunger.Value;
         RefreshUI();
     }
 
@@ -60,6 +86,7 @@ public class PlayerSurvival : NetworkBehaviour
     {
         NetworkHealth.OnValueChanged -= OnNetworkHealthChanged;
         NetworkEnergy.OnValueChanged -= OnNetworkEnergyChanged;
+        NetworkHunger.OnValueChanged -= OnNetworkHungerChanged;
     }
 
     void Update()
@@ -70,22 +97,7 @@ public class PlayerSurvival : NetworkBehaviour
             return;
         }
 
-        // Energy ko dheere-dheere kam karna (Time ke sath)
-        if (currentEnergy > 0)
-        {
-            currentEnergy -= energyDrainRate * Time.deltaTime;
-        }
-        else
-        {
-            currentEnergy = 0;
-            if (!starvingWarningShown)
-            {
-                starvingWarningShown = true;
-                PlayerStarving();
-            }
-        }
-
-        RefreshUI();
+        SimulateNeeds(Time.deltaTime);
 
         // PC par 'E' key dabane par khana khane ka test
         if (Input.GetKeyDown(KeyCode.E))
@@ -130,6 +142,10 @@ public class PlayerSurvival : NetworkBehaviour
 
         currentHealth = Mathf.Clamp(currentHealth + Mathf.Max(0f, healthAmount), 0f, maxHealth);
         currentEnergy = Mathf.Clamp(currentEnergy + Mathf.Max(0f, energyAmount), 0f, maxEnergy);
+        if (currentHealth > 0f)
+        {
+            SetDownedState(false);
+        }
         if (currentEnergy > 0f)
         {
             starvingWarningShown = false;
@@ -146,11 +162,20 @@ public class PlayerSurvival : NetworkBehaviour
         }
 
         currentHealth = Mathf.Clamp(currentHealth - Mathf.Max(0f, damage), 0f, maxHealth);
+        if (currentHealth <= 0f)
+        {
+            SetDownedState(true);
+        }
         SyncNetworkState();
         RefreshUI();
     }
 
     public void SimulateEnergyDrain(float deltaTime)
+    {
+        SimulateNeeds(deltaTime);
+    }
+
+    public void SimulateNeeds(float deltaTime)
     {
         if (currentEnergy <= 0f)
         {
@@ -164,6 +189,22 @@ public class PlayerSurvival : NetworkBehaviour
         else
         {
             currentEnergy = Mathf.Max(0f, currentEnergy - energyDrainRate * deltaTime);
+        }
+
+        currentHunger = Mathf.Max(0f, currentHunger - hungerDrainPerSecond * deltaTime);
+        if (currentHunger <= 0f)
+        {
+            if (!starvingWarningShown)
+            {
+                starvingWarningShown = true;
+                PlayerStarving();
+            }
+
+            currentHealth = Mathf.Max(0f, currentHealth - starvationDamagePerSecond * deltaTime);
+            if (currentHealth <= 0f)
+            {
+                SetDownedState(true);
+            }
         }
 
         SyncNetworkState();
@@ -182,12 +223,98 @@ public class PlayerSurvival : NetworkBehaviour
         RefreshUI();
     }
 
+    private void OnNetworkHungerChanged(float previousValue, float newValue)
+    {
+        currentHunger = newValue;
+        RefreshUI();
+    }
+
+    public void ConsumeFoodServer(float hungerRestored, float energyRestored)
+    {
+        if (IsSpawned && !IsServer)
+        {
+            return;
+        }
+
+        currentHunger = Mathf.Clamp(currentHunger + Mathf.Max(0f, hungerRestored), 0f, maxHunger);
+        currentEnergy = Mathf.Clamp(currentEnergy + Mathf.Max(0f, energyRestored), 0f, maxEnergy);
+        starvingWarningShown = false;
+        SyncNetworkState();
+    }
+
+    public void HealOrReviveServer(float healthAmount, bool revive)
+    {
+        if (IsSpawned && !IsServer)
+        {
+            return;
+        }
+
+        currentHealth = Mathf.Clamp(currentHealth + Mathf.Max(0f, healthAmount), 0f, maxHealth);
+        if (revive && currentHealth > 0f)
+        {
+            SetDownedState(false);
+        }
+
+        SyncNetworkState();
+    }
+
+    public bool TrySpendMoneyServer(int amount)
+    {
+        if (amount < 0 || (IsSpawned && !IsServer) || NetworkMoney.Value < amount)
+        {
+            return false;
+        }
+
+        NetworkMoney.Value -= amount;
+        return true;
+    }
+
+    public void AddMoneyServer(int amount)
+    {
+        if (amount < 0 || (IsSpawned && !IsServer))
+        {
+            return;
+        }
+
+        NetworkMoney.Value = Mathf.Min(int.MaxValue, NetworkMoney.Value + amount);
+    }
+
+    public void AddMedicalKitsServer(int amount)
+    {
+        if (amount < 0 || (IsSpawned && !IsServer))
+        {
+            return;
+        }
+
+        NetworkMedicalKits.Value = Mathf.Min(int.MaxValue, NetworkMedicalKits.Value + amount);
+    }
+
+    public bool TryUseMedicalKitServer()
+    {
+        if ((IsSpawned && !IsServer) || NetworkMedicalKits.Value <= 0)
+        {
+            return false;
+        }
+
+        NetworkMedicalKits.Value--;
+        return true;
+    }
+
+    private void SetDownedState(bool downed)
+    {
+        if (IsSpawned && IsServer)
+        {
+            NetworkIsDowned.Value = downed;
+        }
+    }
+
     private void SyncNetworkState()
     {
         if (IsServer)
         {
             NetworkHealth.Value = currentHealth;
             NetworkEnergy.Value = currentEnergy;
+            NetworkHunger.Value = currentHunger;
         }
     }
 

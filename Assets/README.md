@@ -56,6 +56,8 @@ For a networked build, only the owning client should read movement and shortcut 
 - `PlayerCampGuard.cs`: camp membership, rest/guard state, indicator, and events.
 - `PlayerSocialInteractions.cs`: keyboard and UI-callable emotes.
 - `PlayerSocialInteractions.cs`: owner-only input with networked laugh, speak, and wave emotes.
+- `DeliveryAndHospitalSystem.cs`: server-authoritative cooking, purchases, orders, delivery roles, medical kits, hospital treatment, and delivery status.
+- `SafeZoneManager.cs`: shrinking-zone visual and server-side outside-zone damage.
 
 ## 7. NGO package and NetworkManager
 
@@ -84,6 +86,14 @@ This integration uses **Netcode for GameObjects (NGO)** with Unity Transport.
 2. Add a mobile Fire button and bind it to `NetworkPlayerCombat.Fire`. Assign the owner camera, muzzle, hit layers, damage, and range. The server performs the raycast and applies damage; clients only request a shot and receive the fire animation.
 3. Subscribe a match HUD to `NetworkMatchManager.CurrentState`, `StateTimeRemaining`, and `SafeZoneRadius` to show Waiting, Battle Started, Safe Zone Shrinking, and Match Ended. NetworkVariables invoke their change callbacks on clients, so the HUD should not run its own match timer.
 4. For teammate labels, read `NetworkPlayer.TeamId` and `DisplayName` from each spawned player. Set `DisplayName.Value` on the server from authenticated player data rather than trusting a client string.
+
+## 9a. Safe zone, hit feedback, and guard alerts
+
+1. Add `SafeZoneManager` and `NetworkObject` to a scene object that persists in the battle scene. Assign the persistent `NetworkMatchManager` and an optional flat cylinder or ring Transform to `zoneVisual`.
+2. Set `zoneDamagePerSecond`, `damageTickInterval`, and `visualBaseDiameter`. The visual should have a 1-unit diameter when `visualBaseDiameter` is `1`; the script scales its X/Z size to the replicated `SafeZoneRadius`.
+3. Place the SafeZoneManager object's position at the safe-zone center. The server damages every spawned `NetworkPlayer` outside the horizontal radius during `BattleStarted` and `SafeZoneShrinking`.
+4. On `NetworkPlayerCombat`, assign the weapon muzzle, hit layers, `muzzleFlash` ParticleSystem, and optional `hitMarker` UI object. `hitConfirmed` can play a sound or animate a crosshair. Hit effects are sent only to the shooter after the server confirms a target hit.
+5. On `PlayerCampGuard`, set `guardAlertRadius` and `guardAlertLayer`. Connect `guardAlertRaised` to a warning label, siren, or team HUD and `guardAlertCleared` to hide/stop it. The server compares nearby players' `TeamId` values, and `NetworkAlertActive` replicates the alert state.
 
 ## 10. Connection and platform testing
 
@@ -123,3 +133,24 @@ This integration uses **Netcode for GameObjects (NGO)** with Unity Transport.
 - `MainMenuManager.cs` uses `InputField` and `Text` from `UnityEngine.UI`; replace them with TMP components if the project uses TextMeshPro, changing only the field types.
 - The host owns match state and scene loading. Clients should not call `NetworkSceneManager.LoadScene` directly.
 - Test host plus client on Windows first, then test Android and iOS with the same NetworkManager prefab, transport settings, and gameplay scene list.
+
+## 14. Daily-life economy and hospital setup
+
+1. Add `DeliveryAndHospitalSystem` to PlayerPrefab. `NetworkPlayer` requires it automatically, but verify the component exists on the prefab.
+2. Set cooked meal, medical kit, and general supply prices. Set meal hunger/energy restoration and delivery reward values on the server prefab.
+3. Give each player a starting money balance through the system defaults. Never change `NetworkMoney` from a client UI script; use the exposed server RPC actions.
+4. Create a `Hospital` layer and a trigger volume around each clinic. Add the layer to the hospital collider and assign it to `hospitalZoneLayer` on the player prefab. Create a `HospitalSpawn` tag and tag a safe respawn Transform if a dedicated hospital respawn flow is added.
+5. Use `RequestHospitalTreatment` only inside a hospital zone. `UseMedicalKit` works anywhere and consumes one synchronized medical kit before healing/reviving.
+6. For cooking, create an ingredients pickup or gather interaction that calls `GatherIngredients`, then bind a Cook button to `GameHUD.CookMeal`.
+7. Bind `OrderMeal` and `OrderMedicalKit` to shop/order buttons. Orders charge the recipient when accepted by the server, then wait for a Delivery Boy.
+8. Assign `IsDeliveryBoy` only from server-side role or match logic. A courier accepts an active order, travels to the recipient, and completes it within `deliveryDistance`. The recipient must be a connected player.
+9. Add delivery status text to the HUD and assign `GameHUD.deliveryStatusText`. The status is replicated through `DeliveryStatus`.
+10. NPC delivery AI can call `CompleteNpcDeliveryServer(orderId, npcTransform)` on the server. Give a visible NPC delivery agent a NetworkObject/NetworkTransform if clients must see its route, but keep order completion server-only.
+
+## 15. Safe zone and guard alert setup
+
+1. Add `SafeZoneManager` and `NetworkObject` to a persistent battle-scene object positioned at the zone center. Assign `NetworkMatchManager` and a circular ring/cylinder visual.
+2. Set the visual's base diameter in `visualBaseDiameter`. The script scales only X/Z, preserving the visual's Y scale.
+3. Set `zoneDamagePerSecond` and `damageTickInterval`. Damage is server-only and applies during `BattleStarted` and `SafeZoneShrinking`.
+4. On PlayerPrefab, set `PlayerCampGuard.guardAlertRadius` and `guardAlertLayer` so enemy PlayerPrefab colliders are detected.
+5. Connect `guardAlertRaised` to team warning UI/audio and `guardAlertCleared` to hide/stop it. The replicated `NetworkAlertActive` state updates every client.
