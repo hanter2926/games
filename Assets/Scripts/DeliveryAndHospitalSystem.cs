@@ -315,6 +315,7 @@ public sealed class DeliveryAndHospitalSystem : NetworkBehaviour
         DeliveryAndHospitalSystem recipientSystem = recipient.GetComponent<DeliveryAndHospitalSystem>();
         recipientSystem.GrantDeliveredItem(order.item);
         survival.AddMoneyServer(Mathf.RoundToInt(deliveryReward));
+        GetComponent<PlayerProgression>()?.AwardDeliveryServer();
         order.state = DeliveryOrderState.Delivered;
         DeliveryImmunitySystem.ClearForCourierServer(OwnerClientId);
         SetOrderState(recipient, order, "Delivery received");

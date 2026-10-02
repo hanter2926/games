@@ -46,7 +46,13 @@ public sealed class NetworkPlayerCombat : NetworkBehaviour
             NetworkPlayer target = hit.collider.GetComponentInParent<NetworkPlayer>();
             if (target != null && target != GetComponent<NetworkPlayer>())
             {
-                hitConfirmedOnServer = target.TryApplyDamageFromPlayerServer(GetComponent<NetworkPlayer>(), damage);
+                bool wasEliminated;
+                hitConfirmedOnServer = target.TryApplyDamageFromPlayerServer(GetComponent<NetworkPlayer>(), damage, out wasEliminated);
+                if (wasEliminated)
+                {
+                    NetworkMatchManager matchManager = FindObjectOfType<NetworkMatchManager>();
+                    matchManager?.RegisterEliminationServer(GetComponent<NetworkPlayer>(), target);
+                }
             }
         }
 

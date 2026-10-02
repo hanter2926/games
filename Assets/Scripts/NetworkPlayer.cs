@@ -11,12 +11,14 @@ using UnityEngine;
 [RequireComponent(typeof(DeliveryImmunitySystem))]
 [RequireComponent(typeof(CampCookingSystem))]
 [RequireComponent(typeof(PlayerSessionManager))]
+[RequireComponent(typeof(PlayerProgression))]
 public sealed class NetworkPlayer : NetworkBehaviour
 {
     [Header("Local Components")]
     [SerializeField] private PlayerController controller;
     [SerializeField] private PlayerSurvival survival;
     [SerializeField] private PlayerCampGuard campGuard;
+    [SerializeField] private PlayerProgression progression;
 
     [Header("Network State")]
     public NetworkVariable<bool> NetworkOnGuardDuty = new(false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
@@ -28,6 +30,7 @@ public sealed class NetworkPlayer : NetworkBehaviour
         controller = controller != null ? controller : GetComponent<PlayerController>();
         survival = survival != null ? survival : GetComponent<PlayerSurvival>();
         campGuard = campGuard != null ? campGuard : GetComponent<PlayerCampGuard>();
+        progression = progression != null ? progression : GetComponent<PlayerProgression>();
     }
 
     public override void OnNetworkSpawn()
@@ -45,6 +48,7 @@ public sealed class NetworkPlayer : NetworkBehaviour
 
         if (IsServer)
         {
+            progression.AwardMatchStartServer();
             NetworkMatchManager matchManager = FindObjectOfType<NetworkMatchManager>();
             if (matchManager != null)
             {
@@ -71,6 +75,7 @@ public sealed class NetworkPlayer : NetworkBehaviour
     {
         if (IsServer)
         {
+            bool wasDownedBeforeSimulation = survival.NetworkIsDowned.Value;
             survival.SimulateEnergyDrain(Time.deltaTime);
             if (campGuard.IsInsideCamp && !campGuard.IsOnGuardDuty)
             {
@@ -84,6 +89,12 @@ public sealed class NetworkPlayer : NetworkBehaviour
             if (campGuard.IsOnGuardDuty)
             {
                 campGuard.EvaluateGuardAlert();
+            }
+
+            progression.AddSurvivalTimeServer(Time.deltaTime);
+            if (!wasDownedBeforeSimulation && survival.NetworkIsDowned.Value)
+            {
+                RegisterEnvironmentEliminationServer();
             }
 
         }
@@ -140,11 +151,17 @@ public sealed class NetworkPlayer : NetworkBehaviour
             return;
         }
 
+        bool wasDownedBeforeHit = survival.NetworkIsDowned.Value;
         survival.ApplyDamage(damage);
+        if (!wasDownedBeforeHit && survival.NetworkIsDowned.Value)
+        {
+            RegisterEnvironmentEliminationServer();
+        }
     }
 
-    public bool TryApplyDamageFromPlayerServer(NetworkPlayer attacker, float damage)
+    public bool TryApplyDamageFromPlayerServer(NetworkPlayer attacker, float damage, out bool wasEliminated)
     {
+        wasEliminated = false;
         if (!IsServer || attacker == null)
         {
             return false;
@@ -156,8 +173,16 @@ public sealed class NetworkPlayer : NetworkBehaviour
             return false;
         }
 
+        bool wasDownedBeforeHit = survival.NetworkIsDowned.Value;
         survival.ApplyDamage(damage);
+        wasEliminated = !wasDownedBeforeHit && survival.NetworkIsDowned.Value;
         return true;
+    }
+
+    private void RegisterEnvironmentEliminationServer()
+    {
+        NetworkMatchManager matchManager = FindObjectOfType<NetworkMatchManager>();
+        matchManager?.RegisterEliminationServer(null, this);
     }
 
     private void OnGuardDutyChanged(bool previousValue, bool newValue)

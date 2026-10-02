@@ -8,6 +8,13 @@ public enum MatchJoinPreference : byte
     PreviousTeam
 }
 
+public enum MatchTeamMode : byte
+{
+    Solo,
+    Duo,
+    Squad
+}
+
 [RequireComponent(typeof(NetworkObject))]
 public sealed class PlayerSessionManager : NetworkBehaviour
 {
@@ -19,6 +26,10 @@ public sealed class PlayerSessionManager : NetworkBehaviour
         NetworkVariableWritePermission.Server);
     public NetworkVariable<MatchJoinPreference> JoinPreference = new(
         MatchJoinPreference.Solo,
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server);
+    public NetworkVariable<MatchTeamMode> TeamMode = new(
+        MatchTeamMode.Squad,
         NetworkVariableReadPermission.Everyone,
         NetworkVariableWritePermission.Server);
     public NetworkVariable<bool> IsReturningPlayer = new(
@@ -54,6 +65,11 @@ public sealed class PlayerSessionManager : NetworkBehaviour
 
     public void SubmitLocalSession(string playerName, MatchJoinPreference preference)
     {
+        SubmitLocalSession(playerName, preference, MatchTeamMode.Squad);
+    }
+
+    public void SubmitLocalSession(string playerName, MatchJoinPreference preference, MatchTeamMode teamMode)
+    {
         if (!IsOwner || HasSubmittedSession)
         {
             return;
@@ -61,12 +77,12 @@ public sealed class PlayerSessionManager : NetworkBehaviour
 
         string safeName = string.IsNullOrWhiteSpace(playerName) ? "Player" : playerName.Trim();
         safeName = safeName.Length > 48 ? safeName.Substring(0, 48) : safeName;
-        SubmitSessionServerRpc(new FixedString64Bytes(safeName), preference);
+        SubmitSessionServerRpc(new FixedString64Bytes(safeName), preference, teamMode);
         HasSubmittedSession = true;
     }
 
     [ServerRpc]
-    private void SubmitSessionServerRpc(FixedString64Bytes requestedName, MatchJoinPreference preference)
+    private void SubmitSessionServerRpc(FixedString64Bytes requestedName, MatchJoinPreference preference, MatchTeamMode teamMode)
     {
         NetworkMatchManager matchManager = FindObjectOfType<NetworkMatchManager>();
         if (matchManager == null)
@@ -75,10 +91,10 @@ public sealed class PlayerSessionManager : NetworkBehaviour
             return;
         }
 
-        matchManager.ProcessSessionServer(this, requestedName.ToString(), preference);
+        matchManager.ProcessSessionServer(this, requestedName.ToString(), preference, teamMode);
     }
 
-    public void SetAcceptedServer(string normalizedName, MatchJoinPreference preference, bool returning)
+    public void SetAcceptedServer(string normalizedName, MatchJoinPreference preference, MatchTeamMode teamMode, bool returning)
     {
         if (!IsServer)
         {
@@ -87,6 +103,7 @@ public sealed class PlayerSessionManager : NetworkBehaviour
 
         PlayerName.Value = new FixedString64Bytes(normalizedName);
         JoinPreference.Value = preference;
+        TeamMode.Value = teamMode;
         IsReturningPlayer.Value = returning;
         SessionAccepted.Value = true;
         SessionStatus.Value = new FixedString128Bytes(returning ? "Returning player joined" : "New player joined");

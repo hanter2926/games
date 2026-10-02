@@ -28,6 +28,7 @@ public sealed class MainMenuManager : MonoBehaviour
 
     private bool sceneLoadRequested;
     private bool sessionStatusShown;
+    private MatchTeamMode selectedTeamMode = MatchTeamMode.Squad;
 
     private void Awake()
     {
@@ -151,8 +152,23 @@ public sealed class MainMenuManager : MonoBehaviour
         MatchJoinPreference preference = previousTeamToggle != null && previousTeamToggle.isOn
             ? MatchJoinPreference.PreviousTeam
             : MatchJoinPreference.Solo;
-        session.SubmitLocalSession(playerName, preference);
+        session.SubmitLocalSession(playerName, preference, selectedTeamMode);
         sessionStatusShown = false;
+    }
+
+    public void SetPlayerIdentity(string playerName, bool joinPreviousTeam, MatchTeamMode teamMode = MatchTeamMode.Squad)
+    {
+        if (playerNameInput != null)
+        {
+            playerNameInput.text = playerName;
+        }
+
+        if (previousTeamToggle != null)
+        {
+            previousTeamToggle.isOn = joinPreviousTeam;
+        }
+
+        selectedTeamMode = teamMode;
     }
 
     public void ExitGame()

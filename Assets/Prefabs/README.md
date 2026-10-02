@@ -17,6 +17,7 @@ Create `PlayerPrefab` from a root GameObject with these components:
 - DeliveryImmunitySystem
 - CampCookingSystem
 - PlayerSessionManager
+- PlayerProgression
 
 The scripts add required components automatically, but keep exactly one NetworkObject and one NetworkTransform on the root.
 
@@ -43,6 +44,8 @@ Set NetworkTransform to owner/client authority when supported by the installed N
 Assign `NetworkPlayerCombat.muzzleFlash` to a ParticleSystem under `Muzzle`, and assign a disabled crosshair UI object to `hitMarker` if hit feedback is desired. Assign `PlayerCampGuard.guardIndicator`, `guardAlertRaised`, and `guardAlertCleared` to the guard visual and alert HUD/audio callbacks.
 
 Assign `DeliveryAndHospitalSystem.hospitalZoneLayer`, configure prices and healing values, and use a `Hospital` layer on clinic trigger colliders. Delivery roles must be assigned by server-side code through `AssignDeliveryBoyServer`.
+
+`PlayerProgression` is server-authoritative. It tracks XP, level, rank, kills, matches, deliveries, and survival time. Do not edit its NetworkVariables from UI scripts.
 
 `CampCookingSystem` gives each player a portable cooking kit by default. Configure vegetarian and non-vegetarian ingredient costs, health, energy, hunger values, and cooking duration. The component consumes `DeliveryAndHospitalSystem.NetworkIngredients`, creates synchronized prepared meals, and shares them only with a same-team player within the configured sharing distance.
 

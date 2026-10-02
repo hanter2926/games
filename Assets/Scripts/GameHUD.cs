@@ -12,6 +12,7 @@ public sealed class GameHUD : MonoBehaviour
     [SerializeField] private Text teamCampStatusText;
     [SerializeField] private Text guardStatusText;
     [SerializeField] private Text matchStatusText;
+    [SerializeField] private Text matchKillsText;
     [SerializeField] private Text moneyText;
     [SerializeField] private Text deliveryStatusText;
     [SerializeField] private Text medicalKitsText;
@@ -261,6 +262,11 @@ public sealed class GameHUD : MonoBehaviour
         if (localDelivery != null && deliveryStatusText != null)
         {
             deliveryStatusText.text = localDelivery.DeliveryStatus.Value.ToString();
+        }
+
+        if (matchManager != null && matchKillsText != null)
+        {
+            matchKillsText.text = "Kills: " + matchManager.MatchKillCount.Value;
         }
 
         if (localCooking != null && cookingStatusText != null)

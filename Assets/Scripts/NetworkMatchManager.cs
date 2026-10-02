@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Unity.Collections;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -36,6 +37,7 @@ public sealed class NetworkMatchManager : NetworkBehaviour
     [Min(0f)] [SerializeField] private float waitingDuration = 30f;
     [SerializeField] private float initialSafeZoneRadius = 250f;
     [SerializeField] private float finalSafeZoneRadius = 20f;
+    [SerializeField] private NetworkObject lootCratePrefab;
 
     [Header("Team Camps")]
     [SerializeField] private TeamCamp[] teamCamps;
@@ -56,6 +58,8 @@ public sealed class NetworkMatchManager : NetworkBehaviour
         0f,
         NetworkVariableReadPermission.Everyone,
         NetworkVariableWritePermission.Server);
+    public NetworkVariable<int> MatchKillCount = new(0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+    public NetworkVariable<FixedString128Bytes> LastEliminationMessage = new(default, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
     private readonly List<NetworkPlayer> players = new(MaximumPlayers);
     private readonly Dictionary<string, ReturningProfile> returningProfiles = new(StringComparer.OrdinalIgnoreCase);
@@ -78,6 +82,8 @@ public sealed class NetworkMatchManager : NetworkBehaviour
         SafeZoneRadius.Value = initialSafeZoneRadius;
         StateTimeRemaining.Value = waitingDuration;
         MatchTimeRemaining.Value = 0f;
+        MatchKillCount.Value = 0;
+        LastEliminationMessage.Value = new FixedString128Bytes(string.Empty);
     }
 
     private void Update()
@@ -139,6 +145,46 @@ public sealed class NetworkMatchManager : NetworkBehaviour
             AssignTeamAndSpawn(player, players.Count - 1);
         }
     }
+
+    public void RegisterEliminationServer(NetworkPlayer killer, NetworkPlayer victim)
+    {
+        if (!IsServer || victim == null)
+        {
+            return;
+        }
+
+        MatchKillCount.Value++;
+        PlayerProgression killerProgression = killer != null ? killer.GetComponent<PlayerProgression>() : null;
+        killerProgression?.AwardKillServer();
+
+        string killerName = killer != null ? GetPlayerDisplayName(killer) : "Wildlife";
+        string victimName = GetPlayerDisplayName(victim);
+        LastEliminationMessage.Value = new FixedString128Bytes(killerName + " eliminated " + victimName + " (#" + MatchKillCount.Value + ")");
+        DropLootServer(victim.transform.position);
+    }
+
+    private void DropLootServer(Vector3 position)
+    {
+        if (lootCratePrefab == null)
+        {
+            return;
+        }
+
+        NetworkObject loot = Instantiate(lootCratePrefab, position, Quaternion.identity);
+        loot.Spawn(true);
+    }
+
+    private string GetPlayerDisplayName(NetworkPlayer player)
+    {
+        if (player == null)
+        {
+            return "Player";
+        }
+
+        PlayerSessionManager session = player.GetComponent<PlayerSessionManager>();
+        string sessionName = session != null ? session.PlayerName.Value.ToString() : string.Empty;
+        return string.IsNullOrWhiteSpace(sessionName) ? "Player" : sessionName;
+    }
     public void UnregisterPlayer(NetworkPlayer player)
     {
         if (!IsServer || player == null)
@@ -161,7 +207,7 @@ public sealed class NetworkMatchManager : NetworkBehaviour
 
     public bool IsMatchActive => CurrentState.Value == MatchState.BattleStarted || CurrentState.Value == MatchState.SafeZoneShrinking;
 
-    public void ProcessSessionServer(PlayerSessionManager session, string requestedName, MatchJoinPreference preference)
+    public void ProcessSessionServer(PlayerSessionManager session, string requestedName, MatchJoinPreference preference, MatchTeamMode teamMode)
     {
         if (!IsServer || session == null)
         {
@@ -194,6 +240,12 @@ public sealed class NetworkMatchManager : NetworkBehaviour
         {
             teamId = profile.teamId;
         }
+        else if (teamMode != MatchTeamMode.Solo)
+        {
+            teamId = teamCamps != null && teamCamps.Length > 0
+                ? teamCamps[FindLeastPopulatedCampIndex()].teamId
+                : GetSoloTeamId(player.OwnerClientId);
+        }
         else
         {
             teamId = GetSoloTeamId(player.OwnerClientId);
@@ -201,7 +253,7 @@ public sealed class NetworkMatchManager : NetworkBehaviour
 
         AssignToTeamAndSpawn(player, teamId, players.IndexOf(player));
         returningProfiles[normalizedName] = new ReturningProfile { teamId = teamId };
-        session.SetAcceptedServer(normalizedName, preference, returning);
+        session.SetAcceptedServer(normalizedName, preference, teamMode, returning);
     }
 
     private void StartBattle()

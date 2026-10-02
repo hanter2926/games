@@ -50,18 +50,9 @@ For a networked build, only the owning client should read movement and shortcut 
 
 ## Included scripts
 
-- `PlayerController.cs`: movement, gravity, joystick fallback, and movement lock.
-- `PlayerSurvival.cs`: health, energy drain, recovery, damage, and normalized sliders.
-- `CampArea.cs`: trigger zone and configurable recovery rates.
-- `PlayerCampGuard.cs`: camp membership, rest/guard state, indicator, and events.
-- `PlayerSocialInteractions.cs`: keyboard and UI-callable emotes.
-- `PlayerSocialInteractions.cs`: owner-only input with networked laugh, speak, and wave emotes.
-- `DeliveryAndHospitalSystem.cs`: server-authoritative cooking, purchases, orders, delivery roles, medical kits, hospital treatment, and delivery status.
-- `DeliveryImmunitySystem.cs`: exact 60-second server-time protection for active deliveries.
-- `DayNightCycleManager.cs`: synchronized 9-minute Day/3-minute Night cycle, lighting, and animal spawning.
-- `WildAnimalAI.cs`: server-side night animal targeting, navigation, attacks, and replicated attack effects.
-- `CampCookingSystem.cs`: portable vegetarian/non-vegetarian cooking, prepared meals, and same-team partner sharing.
-- `SafeZoneManager.cs`: shrinking-zone visual and server-side outside-zone damage.
+- `PlayerProgression.cs`: server-authoritative XP, levels, ranks, kills, deliveries, matches, and survival time.
+- `KillFeedUI.cs`: timed elimination feed driven by the replicated match message.
+- `MainMenuUIController.cs`: profile dashboard, mode/map controls, settings, store/inventory events, and Play/Host/Join UI.
 
 ## 7. NGO package and NetworkManager
 
@@ -186,6 +177,7 @@ This integration uses **Netcode for GameObjects (NGO)** with Unity Transport.
 4. A new/solo request receives a unique server-generated TeamId and a configured camp spawn. A returning-player request uses the in-session profile for the normalized name and returns to the previous configured team when available.
 5. If the previous team no longer exists, the server safely falls back to solo. If the 12-minute condition is not met, the server rejects the session and disconnects the client.
 6. The profile currently uses player name for local integration. Replace it with an authenticated account ID before production deployment so users cannot impersonate returning players by typing the same name.
+7. Solo/Duo/Squad selection is sent in the session request and resolved on the server. Solo receives a unique TeamId; Duo/Squad use a configured team camp with least-populated balancing unless the returning-player previous-team option is selected.
 
 ## 20. 50-80 player optimization and setup
 
