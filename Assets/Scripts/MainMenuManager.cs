@@ -17,6 +17,8 @@ public sealed class MainMenuManager : MonoBehaviour
     [Header("Menu UI")]
     [SerializeField] private InputField addressInput;
     [SerializeField] private InputField portInput;
+    [SerializeField] private InputField playerNameInput;
+    [SerializeField] private Toggle previousTeamToggle;
     [SerializeField] private Button hostButton;
     [SerializeField] private Button joinButton;
     [SerializeField] private Button exitButton;
@@ -25,6 +27,7 @@ public sealed class MainMenuManager : MonoBehaviour
     [SerializeField] private GameObject lobbyPanel;
 
     private bool sceneLoadRequested;
+    private bool sessionStatusShown;
 
     private void Awake()
     {
@@ -69,12 +72,14 @@ public sealed class MainMenuManager : MonoBehaviour
         }
 
         NetworkMatchManager matchManager = FindObjectOfType<NetworkMatchManager>();
+        SubmitPlayerSessionIfReady();
         if (matchManager == null)
         {
             return;
         }
 
-        if (matchManager.CurrentState.Value == MatchState.BattleStarted && !sceneLoadRequested)
+        bool gameplayHasStarted = matchManager.CurrentState.Value == MatchState.BattleStarted || matchManager.CurrentState.Value == MatchState.SafeZoneShrinking;
+        if (gameplayHasStarted && !sceneLoadRequested)
         {
             sceneLoadRequested = true;
             SetStatus("Match starting...");
@@ -122,6 +127,34 @@ public sealed class MainMenuManager : MonoBehaviour
         }
     }
 
+    public void SubmitPlayerSessionIfReady()
+    {
+        PlayerSessionManager session = PlayerSessionManager.Local;
+        if (session == null)
+        {
+            return;
+        }
+
+        string sessionStatus = session.SessionStatus.Value.ToString();
+        if (!string.IsNullOrWhiteSpace(sessionStatus) && !sessionStatusShown)
+        {
+            SetStatus(sessionStatus);
+            sessionStatusShown = true;
+        }
+
+        if (session.HasSubmittedSession)
+        {
+            return;
+        }
+
+        string playerName = playerNameInput != null ? playerNameInput.text : "Player";
+        MatchJoinPreference preference = previousTeamToggle != null && previousTeamToggle.isOn
+            ? MatchJoinPreference.PreviousTeam
+            : MatchJoinPreference.Solo;
+        session.SubmitLocalSession(playerName, preference);
+        sessionStatusShown = false;
+    }
+
     public void ExitGame()
     {
         if (networkManager != null && networkManager.IsListening)
@@ -165,7 +198,7 @@ public sealed class MainMenuManager : MonoBehaviour
     {
         if (networkManager != null && clientId == networkManager.LocalClientId)
         {
-            SetStatus(networkManager.IsHost ? "Hosting. Waiting for players..." : "Connected. Waiting for match...");
+            SetStatus(networkManager.IsHost ? "Hosting. Entering session..." : "Connected. Entering session...");
         }
     }
 

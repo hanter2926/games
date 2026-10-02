@@ -8,9 +8,9 @@ Create these scenes in the Unity Editor and add both to Build Settings:
 2. Enable NGO Scene Management.
 3. Add `NetworkMatchManager` and `NetworkObject` to a scene object. Configure minimum players, match timers, and team camps. Register the scene object as a NetworkObject.
 4. Add a Canvas with `MainMenuManager`.
-5. Create MenuPanel controls for address, port, Host Game, Join Game, and Exit.
+5. Create MenuPanel controls for address, port, player name, `Join previous team` Toggle, Host Game, Join Game, and Exit. Assign the player-name InputField and Toggle to MainMenuManager.
 6. Create a disabled LobbyPanel with a connection status Text. Assign all references to MainMenuManager.
-7. Add the PlayerPrefab to NetworkManager > Player Prefab and Network Prefabs.
+7. Add the PlayerPrefab to NetworkManager > Player Prefab and Network Prefabs. It must include PlayerSessionManager.
 
 ## BattleScene.unity
 
@@ -28,11 +28,4 @@ Create these scenes in the Unity Editor and add both to Build Settings:
 12. The portable cooking kit is enabled by default on each PlayerPrefab. Ingredient gathering calls `DeliveryAndHospitalSystem.GatherIngredients`; recipe buttons call `CampCookingSystem.CookVegetarian` or `CookNonVegetarian`. Cooking is server-authoritative and can be used with the portable kit outside or at a camp/tent.
 13. Assign `NetworkPlayerCombat.muzzleFlash` and an optional crosshair `hitMarker` on PlayerPrefab. Assign `PlayerCampGuard.guardAlertRaised` and `guardAlertCleared` to the alert UI/audio callbacks.
 14. Keep the gameplay scene in the NGO Scene Management list. The host loads it when NetworkMatchManager enters BattleStarted; clients follow automatically.
-5. Create Hospital trigger volumes on the `Hospital` layer and place safe respawn markers with the `HospitalSpawn` tag.
-6. Add a Screen Space - Overlay Canvas with `GameHUD`.
-7. Create HealthSlider, EnergySlider, StaminaSlider, HungerSlider, TeamCampStatusText, GuardStatusText, MatchStatusText, MoneyText, MedicalKitsText, and DeliveryStatusText. Assign them to GameHUD.
-8. Add Eat, Guard, Laugh, Speak, Bye, Fire, Cook Meal, Order Meal, Order Medical Kit, Hospital, Medical Kit, Accept Delivery, and Complete Delivery Buttons. Assign them to GameHUD.
-9. Assign `NetworkPlayerCombat.muzzleFlash` and an optional crosshair `hitMarker` on PlayerPrefab. Assign `PlayerCampGuard.guardAlertRaised` and `guardAlertCleared` to the alert UI/audio callbacks.
-10. Keep the gameplay scene in the NGO Scene Management list. The host loads it when NetworkMatchManager enters BattleStarted; clients follow automatically.
-
 Do not place a second NetworkManager or a second persistent NetworkMatchManager in BattleScene. The bootstrap manager persists across the NGO scene transition.

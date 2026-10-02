@@ -16,6 +16,7 @@ Create `PlayerPrefab` from a root GameObject with these components:
 - DeliveryAndHospitalSystem
 - DeliveryImmunitySystem
 - CampCookingSystem
+- PlayerSessionManager
 
 The scripts add required components automatically, but keep exactly one NetworkObject and one NetworkTransform on the root.
 

@@ -178,6 +178,15 @@ This integration uses **Netcode for GameObjects (NGO)** with Unity Transport.
 6. Build a teammate/partner selection UI from spawned NetworkPlayers. Pass the selected teammate's `OwnerClientId` to `GameHUD.SharePreparedMeal(clientId)`. The server validates connected status, same TeamId, and sharing distance before applying recipe benefits.
 7. A shared meal restores the recipient's health, energy, and hunger through `PlayerSurvival`; it is not blocked by the delivery immunity rule because it is a beneficial teammate action.
 
+## 19. Mid-match player session setup
+
+1. Add `PlayerSessionManager` to PlayerPrefab. It stores the synchronized player name, join preference, returning status, and acceptance status.
+2. In MainMenuScene, assign a player-name `InputField` and `Join previous team` `Toggle` to `MainMenuManager`. The menu submits them after the local NGO player spawns.
+3. `NetworkMatchManager.MatchTimeRemaining` is server-authoritative. The match manager accepts a session during BattleStarted or SafeZoneShrinking only when the remaining time is at most 720 seconds and greater than zero.
+4. A new/solo request receives a unique server-generated TeamId and a configured camp spawn. A returning-player request uses the in-session profile for the normalized name and returns to the previous configured team when available.
+5. If the previous team no longer exists, the server safely falls back to solo. If the 12-minute condition is not met, the server rejects the session and disconnects the client.
+6. The profile currently uses player name for local integration. Replace it with an authenticated account ID before production deployment so users cannot impersonate returning players by typing the same name.
+
 ## 15. Safe zone and guard alert setup
 
 1. Add `SafeZoneManager` and `NetworkObject` to a persistent battle-scene object positioned at the zone center. Assign `NetworkMatchManager` and a circular ring/cylinder visual.

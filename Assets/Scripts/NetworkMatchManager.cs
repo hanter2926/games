@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
@@ -15,6 +16,12 @@ public sealed class NetworkMatchManager : NetworkBehaviour
     public const float TotalBattleDurationSeconds = 22f * 60f;
     public const float SafeZoneShrinkStartSeconds = 12f * 60f;
     public const float SafeZoneShrinkDurationSeconds = 10f * 60f;
+    public const float MidMatchJoinRemainingSeconds = 12f * 60f;
+
+    private sealed class ReturningProfile
+    {
+        public int teamId;
+    }
 
     [System.Serializable]
     private sealed class TeamCamp
@@ -44,9 +51,15 @@ public sealed class NetworkMatchManager : NetworkBehaviour
         250f,
         NetworkVariableReadPermission.Everyone,
         NetworkVariableWritePermission.Server);
+    public NetworkVariable<float> MatchTimeRemaining = new(
+        0f,
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server);
 
     private readonly List<NetworkPlayer> players = new();
+    private readonly Dictionary<string, ReturningProfile> returningProfiles = new(StringComparer.OrdinalIgnoreCase);
     private float stateElapsed;
+    private float matchElapsed;
 
     public override void OnNetworkSpawn()
     {
@@ -60,6 +73,7 @@ public sealed class NetworkMatchManager : NetworkBehaviour
         CurrentState.Value = MatchState.WaitingForPlayers;
         SafeZoneRadius.Value = initialSafeZoneRadius;
         StateTimeRemaining.Value = waitingDuration;
+        MatchTimeRemaining.Value = 0f;
     }
 
     private void Update()
@@ -71,6 +85,12 @@ public sealed class NetworkMatchManager : NetworkBehaviour
 
         stateElapsed += Time.deltaTime;
         StateTimeRemaining.Value = Mathf.Max(0f, StateTimeRemaining.Value - Time.deltaTime);
+
+        if (CurrentState.Value == MatchState.BattleStarted || CurrentState.Value == MatchState.SafeZoneShrinking)
+        {
+            matchElapsed = Mathf.Min(TotalBattleDurationSeconds, matchElapsed + Time.deltaTime);
+            MatchTimeRemaining.Value = Mathf.Max(0f, TotalBattleDurationSeconds - matchElapsed);
+        }
 
         switch (CurrentState.Value)
         {
@@ -104,7 +124,10 @@ public sealed class NetworkMatchManager : NetworkBehaviour
         }
 
         players.Add(player);
-        AssignTeamAndSpawn(player, players.Count - 1);
+        if (CurrentState.Value == MatchState.WaitingForPlayers)
+        {
+            AssignTeamAndSpawn(player, players.Count - 1);
+        }
     }
     public void UnregisterPlayer(NetworkPlayer player)
     {
@@ -114,13 +137,69 @@ public sealed class NetworkMatchManager : NetworkBehaviour
         }
 
         players.Remove(player);
+        PlayerSessionManager session = player.GetComponent<PlayerSessionManager>();
+        if (session != null && session.SessionAccepted.Value && !string.IsNullOrWhiteSpace(session.PlayerName.Value.ToString()))
+        {
+            returningProfiles[session.PlayerName.Value.ToString()] = new ReturningProfile { teamId = player.TeamId.Value };
+        }
+    }
+
+    public bool CanAcceptMidMatchJoinServer()
+    {
+        return IsServer && (CurrentState.Value == MatchState.BattleStarted || CurrentState.Value == MatchState.SafeZoneShrinking) && MatchTimeRemaining.Value > 0f && MatchTimeRemaining.Value <= MidMatchJoinRemainingSeconds;
+    }
+
+    public void ProcessSessionServer(PlayerSessionManager session, string requestedName, MatchJoinPreference preference)
+    {
+        if (!IsServer || session == null)
+        {
+            return;
+        }
+
+        string normalizedName = string.IsNullOrWhiteSpace(requestedName) ? "Player" : requestedName.Trim();
+        if (normalizedName.Length > 48)
+        {
+            normalizedName = normalizedName.Substring(0, 48);
+        }
+
+        bool matchStarted = CurrentState.Value == MatchState.BattleStarted || CurrentState.Value == MatchState.SafeZoneShrinking;
+        if (matchStarted && !CanAcceptMidMatchJoinServer())
+        {
+            session.SetRejected("Mid-match joining is available only with 12 minutes or less remaining");
+            NetworkManager.DisconnectClient(session.OwnerClientId);
+            return;
+        }
+
+        bool returning = returningProfiles.TryGetValue(normalizedName, out ReturningProfile profile);
+        NetworkPlayer player = session.GetComponent<NetworkPlayer>();
+        if (player == null)
+        {
+            session.SetRejected("Network player is unavailable");
+            return;
+        }
+
+        int teamId;
+        if (preference == MatchJoinPreference.PreviousTeam && returning && IsConfiguredTeam(profile.teamId))
+        {
+            teamId = profile.teamId;
+        }
+        else
+        {
+            teamId = GetSoloTeamId(player.OwnerClientId);
+        }
+
+        AssignToTeamAndSpawn(player, teamId, players.IndexOf(player));
+        returningProfiles[normalizedName] = new ReturningProfile { teamId = teamId };
+        session.SetAcceptedServer(normalizedName, preference, returning);
     }
 
     private void StartBattle()
     {
         stateElapsed = 0f;
+        matchElapsed = 0f;
         CurrentState.Value = MatchState.BattleStarted;
         StateTimeRemaining.Value = SafeZoneShrinkStartSeconds;
+        MatchTimeRemaining.Value = TotalBattleDurationSeconds;
 
         for (int index = 0; index < players.Count; index++)
         {
@@ -148,12 +227,56 @@ public sealed class NetworkMatchManager : NetworkBehaviour
             return;
         }
 
-        int campIndex = playerIndex % teamCamps.Length;
+        int campIndex = Mathf.Abs(playerIndex) % teamCamps.Length;
+        AssignToTeamAndSpawn(player, teamCamps[campIndex].teamId, playerIndex);
+    }
+
+    private void AssignToTeamAndSpawn(NetworkPlayer player, int teamId, int fallbackIndex)
+    {
+        if (player == null || teamCamps == null || teamCamps.Length == 0)
+        {
+            return;
+        }
+
+        int campIndex = FindCampIndex(teamId);
+        if (campIndex < 0)
+        {
+            campIndex = Mathf.Abs(fallbackIndex) % teamCamps.Length;
+        }
+
         TeamCamp camp = teamCamps[campIndex];
         Transform[] spawnPoints = camp.spawnPoints;
         Transform spawnPoint = spawnPoints != null && spawnPoints.Length > 0
-            ? spawnPoints[playerIndex / teamCamps.Length % spawnPoints.Length]
+            ? spawnPoints[Mathf.Abs(fallbackIndex) % spawnPoints.Length]
             : null;
-        player.SetTeamAndSpawnServer(camp.teamId, spawnPoint);
+        player.SetTeamAndSpawnServer(teamId, spawnPoint);
+    }
+
+    private bool IsConfiguredTeam(int teamId)
+    {
+        return FindCampIndex(teamId) >= 0;
+    }
+
+    private int FindCampIndex(int teamId)
+    {
+        if (teamCamps == null)
+        {
+            return -1;
+        }
+
+        for (int index = 0; index < teamCamps.Length; index++)
+        {
+            if (teamCamps[index].teamId == teamId)
+            {
+                return index;
+            }
+        }
+
+        return -1;
+    }
+
+    private int GetSoloTeamId(ulong clientId)
+    {
+        return 1000000 + (int)(clientId % 1000000);
     }
 }

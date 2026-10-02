@@ -10,6 +10,7 @@ using UnityEngine;
 [RequireComponent(typeof(DeliveryAndHospitalSystem))]
 [RequireComponent(typeof(DeliveryImmunitySystem))]
 [RequireComponent(typeof(CampCookingSystem))]
+[RequireComponent(typeof(PlayerSessionManager))]
 public sealed class NetworkPlayer : NetworkBehaviour
 {
     [Header("Local Components")]
