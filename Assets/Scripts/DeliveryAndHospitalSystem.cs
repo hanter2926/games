@@ -108,6 +108,8 @@ public sealed class DeliveryAndHospitalSystem : NetworkBehaviour
             return;
         }
 
+        DeliveryImmunitySystem.ClearForProtectedRecipientServer(OwnerClientId);
+
         List<int> ordersToRemove = new();
         foreach (KeyValuePair<int, DeliveryOrder> entry in serverOrders)
         {
@@ -252,10 +254,18 @@ public sealed class DeliveryAndHospitalSystem : NetworkBehaviour
             return;
         }
 
+        NetworkPlayer courier = GetPlayer(OwnerClientId);
+        NetworkPlayer recipient = GetPlayer(order.recipientClientId);
+        if (!DeliveryImmunitySystem.ActivateForDeliveryServer(courier, recipient))
+        {
+            SetStatus("Delivery protection unavailable");
+            return;
+        }
+
         order.courierClientId = OwnerClientId;
         order.state = DeliveryOrderState.Accepted;
-        SetOrderState(GetPlayer(order.recipientClientId), order, "Delivery accepted");
-        SetOrderState(GetPlayer(order.courierClientId), order, "Deliver package to the recipient");
+        SetOrderState(recipient, order, "Delivery accepted");
+        SetOrderState(courier, order, "Protected delivery: 60 seconds");
     }
 
     public void CompleteDelivery()
@@ -306,6 +316,7 @@ public sealed class DeliveryAndHospitalSystem : NetworkBehaviour
         recipientSystem.GrantDeliveredItem(order.item);
         survival.AddMoneyServer(Mathf.RoundToInt(deliveryReward));
         order.state = DeliveryOrderState.Delivered;
+        DeliveryImmunitySystem.ClearForCourierServer(OwnerClientId);
         SetOrderState(recipient, order, "Delivery received");
         SetStatus("Delivery complete");
         serverOrders.Remove(order.id);

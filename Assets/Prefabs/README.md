@@ -14,6 +14,7 @@ Create `PlayerPrefab` from a root GameObject with these components:
 - NetworkPlayer
 - NetworkPlayerCombat
 - DeliveryAndHospitalSystem
+- DeliveryImmunitySystem
 
 The scripts add required components automatically, but keep exactly one NetworkObject and one NetworkTransform on the root.
 
@@ -40,6 +41,8 @@ Set NetworkTransform to owner/client authority when supported by the installed N
 Assign `NetworkPlayerCombat.muzzleFlash` to a ParticleSystem under `Muzzle`, and assign a disabled crosshair UI object to `hitMarker` if hit feedback is desired. Assign `PlayerCampGuard.guardIndicator`, `guardAlertRaised`, and `guardAlertCleared` to the guard visual and alert HUD/audio callbacks.
 
 Assign `DeliveryAndHospitalSystem.hospitalZoneLayer`, configure prices and healing values, and use a `Hospital` layer on clinic trigger colliders. Delivery roles must be assigned by server-side code through `AssignDeliveryBoyServer`.
+
+Delivery immunity is activated only when a Delivery Boy accepts an order. The server protects the courier from the ordering player and the ordering player's `TeamId` for exactly 60 seconds. Register the prefab with `DeliveryImmunitySystem` and do not apply player damage by directly changing `PlayerSurvival.currentHealth`; use `NetworkPlayer.TryApplyDamageFromPlayerServer` or the existing combat path.
 
 For a delivery vehicle prefab, add a NetworkObject, NetworkTransform, vehicle collider, driver anchor, and an Animator with `Drive` and `Deliver`. A delivery bag can be a child of the player or vehicle; play `Deliver` when `CompleteDelivery` succeeds.
 

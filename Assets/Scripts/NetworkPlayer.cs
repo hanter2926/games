@@ -8,6 +8,7 @@ using UnityEngine;
 [RequireComponent(typeof(PlayerSurvival))]
 [RequireComponent(typeof(PlayerCampGuard))]
 [RequireComponent(typeof(DeliveryAndHospitalSystem))]
+[RequireComponent(typeof(DeliveryImmunitySystem))]
 public sealed class NetworkPlayer : NetworkBehaviour
 {
     [Header("Local Components")]
@@ -138,6 +139,23 @@ public sealed class NetworkPlayer : NetworkBehaviour
         }
 
         survival.ApplyDamage(damage);
+    }
+
+    public bool TryApplyDamageFromPlayerServer(NetworkPlayer attacker, float damage)
+    {
+        if (!IsServer || attacker == null)
+        {
+            return false;
+        }
+
+        DeliveryImmunitySystem immunity = GetComponent<DeliveryImmunitySystem>();
+        if (immunity != null && immunity.IsDamageBlockedFromServer(attacker))
+        {
+            return false;
+        }
+
+        survival.ApplyDamage(damage);
+        return true;
     }
 
     private void OnGuardDutyChanged(bool previousValue, bool newValue)

@@ -57,6 +57,7 @@ For a networked build, only the owning client should read movement and shortcut 
 - `PlayerSocialInteractions.cs`: keyboard and UI-callable emotes.
 - `PlayerSocialInteractions.cs`: owner-only input with networked laugh, speak, and wave emotes.
 - `DeliveryAndHospitalSystem.cs`: server-authoritative cooking, purchases, orders, delivery roles, medical kits, hospital treatment, and delivery status.
+- `DeliveryImmunitySystem.cs`: exact 60-second server-time protection for active deliveries.
 - `SafeZoneManager.cs`: shrinking-zone visual and server-side outside-zone damage.
 
 ## 7. NGO package and NetworkManager
@@ -146,6 +147,15 @@ This integration uses **Netcode for GameObjects (NGO)** with Unity Transport.
 8. Assign `IsDeliveryBoy` only from server-side role or match logic. A courier accepts an active order, travels to the recipient, and completes it within `deliveryDistance`. The recipient must be a connected player.
 9. Add delivery status text to the HUD and assign `GameHUD.deliveryStatusText`. The status is replicated through `DeliveryStatus`.
 10. NPC delivery AI can call `CompleteNpcDeliveryServer(orderId, npcTransform)` on the server. Give a visible NPC delivery agent a NetworkObject/NetworkTransform if clients must see its route, but keep order completion server-only.
+
+## 16. Delivery immunity rule
+
+1. Add `DeliveryImmunitySystem` to PlayerPrefab. `NetworkPlayer` requires it automatically.
+2. A player orders food or supplies normally. The protection window does not start when the order is placed.
+3. When a server-authorized Delivery Boy accepts the order, `DeliveryImmunitySystem.ActivateForDeliveryServer` records the courier, recipient, recipient `TeamId`, and `NetworkManager.ServerTime` expiry at exactly 60 seconds.
+4. `NetworkPlayerCombat` calls `TryApplyDamageFromPlayerServer` before applying player damage. The courier rejects damage from the ordering client and any attacker with the protected team ID. The shot can still play its normal fire animation, but it is not treated as a successful hit and does not produce a hit marker.
+5. Safe-zone, starvation, and other non-player damage continue to work because they use the environment-only `ApplyDamageServer` path.
+6. Immunity ends on successful delivery, expiry, courier/recipient disconnect, or server cleanup. `NetworkRemainingSeconds` and `NetworkIsImmune` can drive a HUD countdown or courier icon.
 
 ## 15. Safe zone and guard alert setup
 
