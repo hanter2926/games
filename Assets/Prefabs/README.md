@@ -25,6 +25,7 @@ The scripts add required components automatically, but keep exactly one NetworkO
 Create these child objects:
 
 - `Visual`: mesh, model, Animator, and animation controller.
+- `Visual/Wardrobe` (optional): container whose direct children are outfit variants. Name each child for its outfit label and leave the starting outfit active. The tent wardrobe can cycle variants, hide clothing, and restore the original appearance when the private rest ends.
 - `GuardIndicator`: disabled mesh, light, or world-space icon. Assign it to PlayerCampGuard.
 - `Muzzle`: weapon muzzle Transform. Assign it to NetworkPlayerCombat.
 - `OwnerCamera`: camera used only by the owning client. Assign it to NetworkPlayerCombat.ownerCamera.

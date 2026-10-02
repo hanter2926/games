@@ -11,6 +11,7 @@ public sealed class TentIntimacySystem : NetworkBehaviour
 {
     [Header("Interaction")]
     [SerializeField] private KeyCode interactKey = KeyCode.E;
+    [SerializeField] private KeyCode wardrobePanelKey = KeyCode.Tab;
     [Min(0.5f)] [SerializeField] private float interactionRadius = 4f;
     [Min(1f)] [SerializeField] private float consentTimeout = 20f;
 
@@ -24,14 +25,28 @@ public sealed class TentIntimacySystem : NetworkBehaviour
     [SerializeField] private string firstRestTrigger = "SharedRest";
     [SerializeField] private string secondRestTrigger = "SharedRest";
 
+    [Header("Private Wardrobe")]
+    [SerializeField] private string wardrobeRootName = "Wardrobe";
+
     private readonly HashSet<NetworkPlayer> nearbyPlayers = new();
+    private readonly Dictionary<ulong, bool[]> originalWardrobeStates = new();
     private ulong pendingInitiatorClientId;
     private ulong pendingPartnerClientId;
     private ulong expectedConsentClientId;
+    private ulong activeRestInitiatorClientId;
+    private ulong activeRestPartnerClientId;
+    private ulong activeRestInitiatorObjectId;
+    private ulong activeRestPartnerObjectId;
     private float consentExpiresAt;
     private bool consentPending;
     private bool restInProgress;
+    private bool localWardrobeSession;
     private GameObject promptCanvas;
+    private readonly List<GameObject> localWardrobeOptions = new();
+    private NetworkPlayer localWardrobePlayer;
+    private int selectedWardrobeOption;
+    private bool localClothingVisible;
+    private Text wardrobeStatusText;
 
     private void Reset()
     {
@@ -47,10 +62,24 @@ public sealed class TentIntimacySystem : NetworkBehaviour
             ClearConsent();
         }
 
-        if (!IsSpawned || !IsClient || !Input.GetKeyDown(interactKey))
+        if (!IsSpawned || !IsClient)
         {
             return;
         }
+
+        if (localWardrobeSession && Input.GetKeyDown(wardrobePanelKey) && localWardrobePlayer != null)
+        {
+            if (promptCanvas == null)
+            {
+                OpenWardrobe(localWardrobePlayer);
+            }
+            else
+            {
+                ClosePrompt();
+            }
+        }
+
+        if (!Input.GetKeyDown(interactKey)) return;
 
         NetworkPlayer localPlayer = null;
         foreach (NetworkPlayer player in nearbyPlayers)
@@ -194,6 +223,10 @@ public sealed class TentIntimacySystem : NetworkBehaviour
     private void BeginSharedRest(NetworkPlayer initiator, NetworkPlayer partner)
     {
         restInProgress = true;
+        activeRestInitiatorClientId = initiator.OwnerClientId;
+        activeRestPartnerClientId = partner.OwnerClientId;
+        activeRestInitiatorObjectId = initiator.NetworkObjectId;
+        activeRestPartnerObjectId = partner.NetworkObjectId;
         MoveToAnchor(initiator, firstRestAnchor);
         MoveToAnchor(partner, secondRestAnchor);
 
@@ -229,19 +262,281 @@ public sealed class TentIntimacySystem : NetworkBehaviour
         float duration,
         ClientRpcParams clientRpcParams = default)
     {
+        localWardrobeSession = true;
         if (TryGetSpawnedPlayer(initiatorNetworkObjectId, out NetworkPlayer initiator))
         {
+            CaptureWardrobeState(initiator);
             PlayRestAnimation(initiator, firstRestTrigger);
             SetMovement(initiator, false);
+            if (initiator.IsOwner)
+            {
+                OpenWardrobe(initiator);
+            }
         }
 
         if (TryGetSpawnedPlayer(partnerNetworkObjectId, out NetworkPlayer partner))
         {
+            CaptureWardrobeState(partner);
             PlayRestAnimation(partner, secondRestTrigger);
             SetMovement(partner, false);
+            if (partner.IsOwner)
+            {
+                OpenWardrobe(partner);
+            }
         }
 
         StartCoroutine(RestoreMovementAfterDelay(initiatorNetworkObjectId, partnerNetworkObjectId, duration));
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    private void RequestWardrobeChangeServerRpc(
+        ulong targetPlayerObjectId,
+        int outfitIndex,
+        bool clothingVisible,
+        ServerRpcParams rpcParams = default)
+    {
+        ulong senderClientId = rpcParams.Receive.SenderClientId;
+        if (!restInProgress ||
+            (senderClientId != activeRestInitiatorClientId && senderClientId != activeRestPartnerClientId) ||
+            !TryGetSpawnedPlayer(targetPlayerObjectId, out NetworkPlayer targetPlayer) ||
+            targetPlayer.OwnerClientId != senderClientId ||
+            (targetPlayerObjectId != activeRestInitiatorObjectId && targetPlayerObjectId != activeRestPartnerObjectId))
+        {
+            return;
+        }
+
+        Transform wardrobeRoot = FindWardrobeRoot(targetPlayer);
+        if (wardrobeRoot == null || outfitIndex < -1 || outfitIndex >= wardrobeRoot.childCount)
+        {
+            return;
+        }
+
+        bool applyClothing = clothingVisible && outfitIndex >= 0;
+        ApplyWardrobeChangeClientRpc(
+            targetPlayerObjectId,
+            outfitIndex,
+            applyClothing,
+            TargetClients(activeRestInitiatorClientId, activeRestPartnerClientId));
+    }
+
+    [ClientRpc]
+    private void ApplyWardrobeChangeClientRpc(
+        ulong targetPlayerObjectId,
+        int outfitIndex,
+        bool clothingVisible,
+        ClientRpcParams clientRpcParams = default)
+    {
+        if (!TryGetSpawnedPlayer(targetPlayerObjectId, out NetworkPlayer targetPlayer))
+        {
+            return;
+        }
+
+        Transform wardrobeRoot = FindWardrobeRoot(targetPlayer);
+        if (wardrobeRoot == null)
+        {
+            return;
+        }
+
+        for (int index = 0; index < wardrobeRoot.childCount; index++)
+        {
+            wardrobeRoot.GetChild(index).gameObject.SetActive(clothingVisible && index == outfitIndex);
+        }
+
+        if (targetPlayer.IsOwner)
+        {
+            selectedWardrobeOption = outfitIndex + 1;
+            localClothingVisible = clothingVisible;
+            RefreshWardrobeStatus();
+        }
+    }
+
+    [ClientRpc]
+    private void EndSharedRestClientRpc(ClientRpcParams clientRpcParams = default)
+    {
+        localWardrobeSession = false;
+        RestoreOriginalWardrobeStates();
+        ClosePrompt();
+        localWardrobeOptions.Clear();
+        localWardrobePlayer = null;
+        wardrobeStatusText = null;
+    }
+
+    private void CaptureWardrobeState(NetworkPlayer player)
+    {
+        Transform wardrobeRoot = FindWardrobeRoot(player);
+        if (wardrobeRoot == null || originalWardrobeStates.ContainsKey(player.NetworkObjectId))
+        {
+            return;
+        }
+
+        bool[] activeStates = new bool[wardrobeRoot.childCount];
+        for (int index = 0; index < wardrobeRoot.childCount; index++)
+        {
+            activeStates[index] = wardrobeRoot.GetChild(index).gameObject.activeSelf;
+        }
+
+        originalWardrobeStates.Add(player.NetworkObjectId, activeStates);
+    }
+
+    private void RestoreOriginalWardrobeStates()
+    {
+        foreach (KeyValuePair<ulong, bool[]> state in originalWardrobeStates)
+        {
+            if (!TryGetSpawnedPlayer(state.Key, out NetworkPlayer player))
+            {
+                continue;
+            }
+
+            Transform wardrobeRoot = FindWardrobeRoot(player);
+            if (wardrobeRoot == null)
+            {
+                continue;
+            }
+
+            int childCount = Mathf.Min(wardrobeRoot.childCount, state.Value.Length);
+            for (int index = 0; index < childCount; index++)
+            {
+                wardrobeRoot.GetChild(index).gameObject.SetActive(state.Value[index]);
+            }
+        }
+
+        originalWardrobeStates.Clear();
+    }
+
+    private void OpenWardrobe(NetworkPlayer player)
+    {
+        Transform wardrobeRoot = FindWardrobeRoot(player);
+        if (wardrobeRoot == null)
+        {
+            Debug.LogWarning($"No '{wardrobeRootName}' child found on {player.name}; private wardrobe controls are unavailable.");
+            return;
+        }
+
+        localWardrobePlayer = player;
+        localWardrobeOptions.Clear();
+        int activeIndex = -1;
+        for (int index = 0; index < wardrobeRoot.childCount; index++)
+        {
+            GameObject outfit = wardrobeRoot.GetChild(index).gameObject;
+            localWardrobeOptions.Add(outfit);
+            if (outfit.activeSelf)
+            {
+                activeIndex = index;
+            }
+        }
+
+        selectedWardrobeOption = activeIndex + 1;
+        localClothingVisible = activeIndex >= 0;
+        CreateWardrobePanel();
+        RefreshWardrobeStatus();
+    }
+
+    private void CreateWardrobePanel()
+    {
+        ClosePrompt();
+        promptCanvas = new GameObject("TentWardrobe", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
+        Canvas canvas = promptCanvas.GetComponent<Canvas>();
+        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        canvas.sortingOrder = 100;
+        CanvasScaler scaler = promptCanvas.GetComponent<CanvasScaler>();
+        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        scaler.referenceResolution = new Vector2(1280f, 720f);
+        EnsureEventSystem();
+
+        GameObject panel = CreateUiObject("Panel", promptCanvas.transform, typeof(Image));
+        RectTransform panelRect = panel.GetComponent<RectTransform>();
+        panelRect.anchorMin = new Vector2(0.5f, 0.5f);
+        panelRect.anchorMax = new Vector2(0.5f, 0.5f);
+        panelRect.sizeDelta = new Vector2(520f, 230f);
+        panel.GetComponent<Image>().color = new Color(0.08f, 0.1f, 0.09f, 0.96f);
+
+        CreateLabel("Title", panel.transform, "Private wardrobe", new Vector2(0f, 72f), new Vector2(470f, 40f), 24);
+        wardrobeStatusText = CreateLabel("OutfitStatus", panel.transform, string.Empty, new Vector2(0f, 28f), new Vector2(470f, 40f), 20);
+        CreateWardrobeButton("Previous", "Previous", new Vector2(-180f, -48f), () => ChangeWardrobeSelection(-1));
+        CreateWardrobeButton("ToggleClothing", "Clothes: On/Off", new Vector2(-60f, -48f), ToggleWardrobeClothing);
+        CreateWardrobeButton("Next", "Next", new Vector2(60f, -48f), () => ChangeWardrobeSelection(1));
+        CreateWardrobeButton("Close", "Close", new Vector2(180f, -48f), ClosePrompt);
+    }
+
+    private void CreateWardrobeButton(string objectName, string label, Vector2 position, System.Action action)
+    {
+        GameObject buttonObject = CreateUiObject(objectName, promptCanvas.transform.GetChild(0), typeof(Image), typeof(Button));
+        RectTransform buttonRect = buttonObject.GetComponent<RectTransform>();
+        buttonRect.anchorMin = new Vector2(0.5f, 0.5f);
+        buttonRect.anchorMax = new Vector2(0.5f, 0.5f);
+        buttonRect.anchoredPosition = position;
+        buttonRect.sizeDelta = new Vector2(110f, 46f);
+        buttonObject.GetComponent<Image>().color = new Color(0.22f, 0.4f, 0.34f, 1f);
+        buttonObject.GetComponent<Button>().onClick.AddListener(() => action());
+        CreateLabel("Label", buttonObject.transform, label, Vector2.zero, new Vector2(104f, 40f), 16);
+    }
+
+    private void ChangeWardrobeSelection(int direction)
+    {
+        if (localWardrobePlayer == null || localWardrobeOptions.Count == 0)
+        {
+            return;
+        }
+
+        int optionCount = localWardrobeOptions.Count + 1;
+        selectedWardrobeOption = (selectedWardrobeOption + direction + optionCount) % optionCount;
+        localClothingVisible = selectedWardrobeOption > 0;
+        SubmitWardrobeChange();
+    }
+
+    private void ToggleWardrobeClothing()
+    {
+        if (localWardrobePlayer == null || selectedWardrobeOption == 0)
+        {
+            return;
+        }
+
+        localClothingVisible = !localClothingVisible;
+        SubmitWardrobeChange();
+    }
+
+    private void SubmitWardrobeChange()
+    {
+        if (!IsSpawned || localWardrobePlayer == null || !localWardrobePlayer.IsOwner)
+        {
+            return;
+        }
+
+        RequestWardrobeChangeServerRpc(
+            localWardrobePlayer.NetworkObjectId,
+            selectedWardrobeOption - 1,
+            localClothingVisible);
+    }
+
+    private void RefreshWardrobeStatus()
+    {
+        if (wardrobeStatusText == null)
+        {
+            return;
+        }
+
+        string outfitName = selectedWardrobeOption == 0
+            ? "No outfit"
+            : localWardrobeOptions[selectedWardrobeOption - 1].name;
+        wardrobeStatusText.text = $"{outfitName} | {(localClothingVisible ? "Visible" : "Hidden")}";
+    }
+
+    private Transform FindWardrobeRoot(NetworkPlayer player)
+    {
+        if (player == null || string.IsNullOrWhiteSpace(wardrobeRootName))
+        {
+            return null;
+        }
+
+        foreach (Transform child in player.GetComponentsInChildren<Transform>(true))
+        {
+            if (child.name == wardrobeRootName)
+            {
+                return child;
+            }
+        }
+
+        return null;
     }
 
     private void CreatePrompt(string message, bool allowConsent)
@@ -297,7 +592,7 @@ public sealed class TentIntimacySystem : NetworkBehaviour
         CreateLabel("Label", buttonObject.transform, label, Vector2.zero, new Vector2(140f, 40f), 20);
     }
 
-    private static void CreateLabel(string objectName, Transform parent, string value, Vector2 position, Vector2 size, int fontSize)
+    private static Text CreateLabel(string objectName, Transform parent, string value, Vector2 position, Vector2 size, int fontSize)
     {
         GameObject labelObject = CreateUiObject(objectName, parent, typeof(Text));
         RectTransform labelRect = labelObject.GetComponent<RectTransform>();
@@ -314,6 +609,7 @@ public sealed class TentIntimacySystem : NetworkBehaviour
         label.horizontalOverflow = HorizontalWrapMode.Wrap;
         label.verticalOverflow = VerticalWrapMode.Overflow;
         label.raycastTarget = false;
+        return label;
     }
 
     private static GameObject CreateUiObject(string objectName, Transform parent, params System.Type[] components)
@@ -350,7 +646,17 @@ public sealed class TentIntimacySystem : NetworkBehaviour
     private IEnumerator ResetRestStateAfterDelay(float duration)
     {
         yield return new WaitForSeconds(duration);
+        if (!IsServer || !restInProgress)
+        {
+            yield break;
+        }
+
+        EndSharedRestClientRpc(TargetClients(activeRestInitiatorClientId, activeRestPartnerClientId));
         restInProgress = false;
+        activeRestInitiatorClientId = 0;
+        activeRestPartnerClientId = 0;
+        activeRestInitiatorObjectId = 0;
+        activeRestPartnerObjectId = 0;
     }
 
     private void MoveToAnchor(NetworkPlayer player, Transform anchor)
@@ -461,6 +767,8 @@ public sealed class TentIntimacySystem : NetworkBehaviour
     public override void OnNetworkDespawn()
     {
         ClearConsent();
+        localWardrobeSession = false;
+        RestoreOriginalWardrobeStates();
         ClosePrompt();
         nearbyPlayers.Clear();
     }
