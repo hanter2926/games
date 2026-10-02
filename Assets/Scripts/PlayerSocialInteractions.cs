@@ -1,7 +1,16 @@
+using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.Events;
 
-public sealed class PlayerSocialInteractions : MonoBehaviour
+public enum SocialEmote : byte
+{
+    Laugh,
+    Speak,
+    WaveBye
+}
+
+[RequireComponent(typeof(NetworkObject))]
+public sealed class PlayerSocialInteractions : NetworkBehaviour
 {
     [Header("Animation")]
     [SerializeField] private Animator animator;
@@ -21,6 +30,11 @@ public sealed class PlayerSocialInteractions : MonoBehaviour
 
     private void Update()
     {
+        if (IsSpawned && !IsOwner)
+        {
+            return;
+        }
+
         if (Input.GetKeyDown(laughShortcut)) Laugh();
         if (Input.GetKeyDown(speakShortcut)) Speak();
         if (Input.GetKeyDown(waveShortcut)) WaveBye();
@@ -28,23 +42,66 @@ public sealed class PlayerSocialInteractions : MonoBehaviour
 
     public void Laugh()
     {
-        PlayTrigger(laughTrigger);
-        laughPerformed?.Invoke();
-        Debug.Log("Social action: laugh");
+        PerformEmote(SocialEmote.Laugh);
     }
 
     public void Speak()
     {
-        PlayTrigger(speakTrigger);
-        voiceLinePerformed?.Invoke();
-        Debug.Log("Social action: speak voice line");
+        PerformEmote(SocialEmote.Speak);
     }
 
     public void WaveBye()
     {
-        PlayTrigger(waveTrigger);
-        goodbyeWavePerformed?.Invoke();
-        Debug.Log("Social action: wave goodbye");
+        PerformEmote(SocialEmote.WaveBye);
+    }
+
+    private void PerformEmote(SocialEmote emote)
+    {
+        if (IsSpawned)
+        {
+            if (IsOwner)
+            {
+                RequestEmoteServerRpc(emote);
+            }
+
+            return;
+        }
+
+        PlayEmoteLocally(emote);
+    }
+
+    [ServerRpc]
+    private void RequestEmoteServerRpc(SocialEmote emote)
+    {
+        PlayEmoteClientRpc(emote);
+    }
+
+    [ClientRpc]
+    private void PlayEmoteClientRpc(SocialEmote emote)
+    {
+        PlayEmoteLocally(emote);
+    }
+
+    private void PlayEmoteLocally(SocialEmote emote)
+    {
+        switch (emote)
+        {
+            case SocialEmote.Laugh:
+                PlayTrigger(laughTrigger);
+                laughPerformed?.Invoke();
+                Debug.Log("Social action: laugh");
+                break;
+            case SocialEmote.Speak:
+                PlayTrigger(speakTrigger);
+                voiceLinePerformed?.Invoke();
+                Debug.Log("Social action: speak voice line");
+                break;
+            case SocialEmote.WaveBye:
+                PlayTrigger(waveTrigger);
+                goodbyeWavePerformed?.Invoke();
+                Debug.Log("Social action: wave goodbye");
+                break;
+        }
     }
 
     private void PlayTrigger(string triggerName)

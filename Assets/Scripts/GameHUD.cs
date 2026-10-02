@@ -17,12 +17,14 @@ public sealed class GameHUD : MonoBehaviour
     [SerializeField] private Button laughButton;
     [SerializeField] private Button speakButton;
     [SerializeField] private Button byeButton;
+    [SerializeField] private Button fireButton;
     [SerializeField] private float foodAmount = 50f;
 
     private NetworkPlayer localPlayer;
     private PlayerSurvival localSurvival;
     private PlayerCampGuard localCampGuard;
     private PlayerSocialInteractions localSocial;
+    private NetworkPlayerCombat localCombat;
     private NetworkMatchManager matchManager;
 
     private void OnEnable()
@@ -32,6 +34,7 @@ public sealed class GameHUD : MonoBehaviour
         laughButton?.onClick.AddListener(Laugh);
         speakButton?.onClick.AddListener(Speak);
         byeButton?.onClick.AddListener(WaveBye);
+        fireButton?.onClick.AddListener(Fire);
     }
 
     private void OnDisable()
@@ -41,6 +44,7 @@ public sealed class GameHUD : MonoBehaviour
         laughButton?.onClick.RemoveListener(Laugh);
         speakButton?.onClick.RemoveListener(Speak);
         byeButton?.onClick.RemoveListener(WaveBye);
+        fireButton?.onClick.RemoveListener(Fire);
         UnbindMatchManager();
     }
 
@@ -82,6 +86,11 @@ public sealed class GameHUD : MonoBehaviour
         localSocial?.WaveBye();
     }
 
+    public void Fire()
+    {
+        localCombat?.Fire();
+    }
+
     private void TryBindLocalPlayer()
     {
         NetworkManager networkManager = NetworkManager.Singleton;
@@ -99,6 +108,7 @@ public sealed class GameHUD : MonoBehaviour
         localSurvival = localPlayer != null ? localPlayer.GetComponent<PlayerSurvival>() : null;
         localCampGuard = localPlayer != null ? localPlayer.GetComponent<PlayerCampGuard>() : null;
         localSocial = localPlayer != null ? localPlayer.GetComponent<PlayerSocialInteractions>() : null;
+        localCombat = localPlayer != null ? localPlayer.GetComponent<NetworkPlayerCombat>() : null;
     }
 
     private void TryBindMatchManager()

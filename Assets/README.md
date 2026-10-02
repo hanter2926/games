@@ -6,7 +6,7 @@ For a networked build, only the owning client should read movement and shortcut 
 
 ## 1. Player prefab
 
-1. Create a player prefab with a root `CharacterController`, `NetworkObject`, `PlayerController`, `NetworkTransform`, `PlayerSurvival`, `PlayerCampGuard`, and `PlayerSocialInteractions`. `PlayerController` and `PlayerSurvival` automatically require the NetworkObject; `PlayerController` also requires NetworkTransform.
+1. Create a player prefab with a root `CharacterController`, `NetworkObject`, `PlayerController`, `NetworkTransform`, `PlayerSurvival`, `PlayerCampGuard`, `PlayerSocialInteractions`, `NetworkPlayer`, and `NetworkPlayerCombat`. `PlayerController`, `PlayerSurvival`, and `PlayerSocialInteractions` automatically require the NetworkObject; `PlayerController` also requires NetworkTransform.
 2. Assign the player Animator to `PlayerCampGuard` and `PlayerSocialInteractions`.
 3. Add Animator parameters named `IsOnGuardDuty` (Bool), `Laugh` (Trigger), `Speak` (Trigger), and `Wave` (Trigger). Add transitions from the locomotion state to the corresponding action states and back using exit time.
 4. Create a child object such as `GuardIndicator` with a visible mesh, light, or world-space Canvas icon. Assign it to `PlayerCampGuard.guardIndicator` and disable the object initially.
@@ -39,7 +39,7 @@ For a networked build, only the owning client should read movement and shortcut 
 1. Add three mobile Buttons to the action HUD: Laugh, Speak, and Bye.
 2. Bind their On Click events to `PlayerSocialInteractions.Laugh`, `.Speak`, and `.WaveBye`.
 3. The default PC shortcuts are `1`, `2`, and `3`. Change the serialized keys if needed.
-4. Connect `voiceLinePerformed` to an AudioSource or voice-line manager. For a multiplayer game, replicate the selected emote ID and let each client play the matching local animation/audio.
+4. Connect `voiceLinePerformed` to an AudioSource or voice-line manager. `PlayerSocialInteractions` replicates the selected emote ID through a `ServerRpc` and `ClientRpc`, so every client plays the matching local animation/audio. Only the owning client reads social keyboard input.
 
 ## 6. Cross-platform input
 
@@ -52,6 +52,7 @@ For a networked build, only the owning client should read movement and shortcut 
 - `CampArea.cs`: trigger zone and configurable recovery rates.
 - `PlayerCampGuard.cs`: camp membership, rest/guard state, indicator, and events.
 - `PlayerSocialInteractions.cs`: keyboard and UI-callable emotes.
+- `PlayerSocialInteractions.cs`: owner-only input with networked laugh, speak, and wave emotes.
 
 ## 7. NGO package and NetworkManager
 
