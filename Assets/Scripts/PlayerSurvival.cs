@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.UI;
 
 [RequireComponent(typeof(NetworkObject))]
+
 public class PlayerSurvival : NetworkBehaviour
 {
     [Header("Health")]

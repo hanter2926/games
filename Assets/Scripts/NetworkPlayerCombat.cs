@@ -13,6 +13,7 @@ public sealed class NetworkPlayerCombat : NetworkBehaviour
     [SerializeField] private string fireTrigger = "Fire";
     [SerializeField] private Animator animator;
 
+
     public void Fire()
     {
         if (!IsOwner)

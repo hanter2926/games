@@ -104,7 +104,6 @@ public sealed class NetworkMatchManager : NetworkBehaviour
         players.Add(player);
         AssignTeamAndSpawn(player, players.Count - 1);
     }
-
     public void UnregisterPlayer(NetworkPlayer player)
     {
         if (!IsServer || player == null)

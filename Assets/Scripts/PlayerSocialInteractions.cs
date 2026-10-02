@@ -9,6 +9,11 @@ public enum SocialEmote : byte
     WaveBye
 }
 
+[System.Serializable]
+public sealed class ChatPopupEvent : UnityEvent<string>
+{
+}
+
 [RequireComponent(typeof(NetworkObject))]
 public sealed class PlayerSocialInteractions : NetworkBehaviour
 {
@@ -22,11 +27,17 @@ public sealed class PlayerSocialInteractions : NetworkBehaviour
     public UnityEvent laughPerformed;
     public UnityEvent voiceLinePerformed;
     public UnityEvent goodbyeWavePerformed;
+    public ChatPopupEvent chatPopupPerformed;
+
+    [Header("Chat Popup Messages")]
+    [SerializeField] private string laughMessage = "Haha!";
+    [SerializeField] private string speakMessage = "Hey team!";
+    [SerializeField] private string waveMessage = "Bye!";
 
     [Header("PC Shortcuts")]
-    [SerializeField] private KeyCode laughShortcut = KeyCode.Alpha1;
-    [SerializeField] private KeyCode speakShortcut = KeyCode.Alpha2;
-    [SerializeField] private KeyCode waveShortcut = KeyCode.Alpha3;
+    [SerializeField] private KeyCode laughShortcut = KeyCode.L;
+    [SerializeField] private KeyCode speakShortcut = KeyCode.V;
+    [SerializeField] private KeyCode waveShortcut = KeyCode.B;
 
     private void Update()
     {
@@ -89,16 +100,19 @@ public sealed class PlayerSocialInteractions : NetworkBehaviour
             case SocialEmote.Laugh:
                 PlayTrigger(laughTrigger);
                 laughPerformed?.Invoke();
+                chatPopupPerformed?.Invoke(laughMessage);
                 Debug.Log("Social action: laugh");
                 break;
             case SocialEmote.Speak:
                 PlayTrigger(speakTrigger);
                 voiceLinePerformed?.Invoke();
+                chatPopupPerformed?.Invoke(speakMessage);
                 Debug.Log("Social action: speak voice line");
                 break;
             case SocialEmote.WaveBye:
                 PlayTrigger(waveTrigger);
                 goodbyeWavePerformed?.Invoke();
+                chatPopupPerformed?.Invoke(waveMessage);
                 Debug.Log("Social action: wave goodbye");
                 break;
         }

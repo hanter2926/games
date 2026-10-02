@@ -7,6 +7,7 @@ public sealed class GameHUD : MonoBehaviour
     [Header("Status UI")]
     [SerializeField] private Slider healthSlider;
     [SerializeField] private Slider energySlider;
+    [SerializeField] private Slider staminaSlider;
     [SerializeField] private Text teamCampStatusText;
     [SerializeField] private Text guardStatusText;
     [SerializeField] private Text matchStatusText;
@@ -22,6 +23,7 @@ public sealed class GameHUD : MonoBehaviour
 
     private NetworkPlayer localPlayer;
     private PlayerSurvival localSurvival;
+    private PlayerController localController;
     private PlayerCampGuard localCampGuard;
     private PlayerSocialInteractions localSocial;
     private NetworkPlayerCombat localCombat;
@@ -105,6 +107,7 @@ public sealed class GameHUD : MonoBehaviour
         }
 
         localPlayer = nextPlayer;
+        localController = localPlayer != null ? localPlayer.GetComponent<PlayerController>() : null;
         localSurvival = localPlayer != null ? localPlayer.GetComponent<PlayerSurvival>() : null;
         localCampGuard = localPlayer != null ? localPlayer.GetComponent<PlayerCampGuard>() : null;
         localSocial = localPlayer != null ? localPlayer.GetComponent<PlayerSocialInteractions>() : null;
@@ -149,6 +152,11 @@ public sealed class GameHUD : MonoBehaviour
             {
                 energySlider.value = localSurvival.currentEnergy / localSurvival.maxEnergy;
             }
+        }
+
+        if (localController != null && staminaSlider != null && localController.maxStamina > 0f)
+        {
+            staminaSlider.value = localController.CurrentStamina / localController.maxStamina;
         }
 
         if (localCampGuard != null)

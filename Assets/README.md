@@ -38,12 +38,15 @@ For a networked build, only the owning client should read movement and shortcut 
 
 1. Add three mobile Buttons to the action HUD: Laugh, Speak, and Bye.
 2. Bind their On Click events to `PlayerSocialInteractions.Laugh`, `.Speak`, and `.WaveBye`.
-3. The default PC shortcuts are `1`, `2`, and `3`. Change the serialized keys if needed.
+3. The default PC shortcuts are `L` for Laugh, `V` for Speak, and `B` for Wave Bye. Change the serialized keys if needed.
 4. Connect `voiceLinePerformed` to an AudioSource or voice-line manager. `PlayerSocialInteractions` replicates the selected emote ID through a `ServerRpc` and `ClientRpc`, so every client plays the matching local animation/audio. Only the owning client reads social keyboard input.
+5. Bind `chatPopupPerformed` to a speech-bubble or status-text method that accepts one `string` argument. The event receives the configured laugh, speak, or wave message on every client.
 
 ## 6. Cross-platform input
 
 `PlayerController` uses Unity's legacy `Horizontal` and `Vertical` axes for WASD/arrow keys and overrides them with the assigned virtual joystick when its values are outside the dead zone. Sprint uses Left Shift on PC. Replace the input reads with the Unity Input System action callbacks if the project has migrated to the new system; keep the public gameplay methods unchanged so the UI wiring remains the same.
+
+`PlayerController` exposes `maxStamina`, `sprintStaminaDrainPerSecond`, `staminaRecoveryPerSecond`, and `exhaustionRecoveryThreshold`. Assign a normalized Slider (`Min Value = 0`, `Max Value = 1`) to `staminaSlider`. Stamina drains only while sprinting with movement input, recovers while walking or standing still, and blocks sprinting until the recovery threshold is reached.
 
 ## Included scripts
 
@@ -96,8 +99,8 @@ This integration uses **Netcode for GameObjects (NGO)** with Unity Transport.
 
 ## 11. Game HUD setup
 
-1. In the gameplay scene, create a `Screen Space - Overlay` Canvas with a `GameHUD` component. Add a top status row containing `HealthSlider`, `EnergySlider`, `TeamCampStatusText`, and `GuardStatusText`.
-2. Set both sliders to Min `0`, Max `1`, disable whole-number mode, and assign their Fill Rects. `GameHUD` reads the normalized values from the local `PlayerSurvival` NetworkVariables.
+1. In the gameplay scene, create a `Screen Space - Overlay` Canvas with a `GameHUD` component. Add a top status row containing `HealthSlider`, `EnergySlider`, `StaminaSlider`, `TeamCampStatusText`, and `GuardStatusText`.
+2. Set all three sliders to Min `0`, Max `1`, disable whole-number mode, and assign their Fill Rects. `GameHUD` reads health and energy from the local `PlayerSurvival` and stamina from the local `PlayerController`.
 3. Add a `MatchStatusText` near the top center. It displays Waiting for players, Battle started, Safe zone shrinking, or Match ended from `NetworkMatchManager.CurrentState`.
 4. Add a bottom action row with Buttons named `EatButton`, `GuardButton`, `LaughButton`, `SpeakButton`, and `ByeButton`. Assign them to the matching `GameHUD` fields. The script registers their click handlers automatically; do not also add duplicate OnClick entries in the Inspector.
 5. Set the Eat button's `foodAmount` to the desired gameplay value. The call is routed through `PlayerSurvival`'s server RPC, while Guard calls `NetworkPlayer.ToggleGuardDutyNetworked` for server validation.
