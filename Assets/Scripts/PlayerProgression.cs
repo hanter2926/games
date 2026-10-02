@@ -21,6 +21,9 @@ public sealed class PlayerProgression : NetworkBehaviour
     public NetworkVariable<int> MatchesPlayed = new(0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
     public NetworkVariable<int> DeliveriesCompleted = new(0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
     public NetworkVariable<float> SurvivalSeconds = new(0f, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+    public NetworkVariable<float> EmotionalBond = new(0f, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
+    [Min(0f)] public float maxEmotionalBond = 100f;
 
     private float survivalXpAccumulator;
 
@@ -71,6 +74,16 @@ public sealed class PlayerProgression : NetworkBehaviour
             survivalXpAccumulator -= minutes * 60f;
             AwardExperienceServer(minutes * 10);
         }
+    }
+
+    public void AddEmotionalBondServer(float amount)
+    {
+        if (!IsServer || amount <= 0f)
+        {
+            return;
+        }
+
+        EmotionalBond.Value = Mathf.Clamp(EmotionalBond.Value + amount, 0f, maxEmotionalBond);
     }
 
     public void AwardExperienceServer(int amount)

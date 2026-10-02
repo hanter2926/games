@@ -20,6 +20,11 @@ public class PlayerController : NetworkBehaviour
     [Min(0f)] public float staminaRecoveryPerSecond = 15f;
     [Range(0f, 1f)] public float exhaustionRecoveryThreshold = 0.25f;
     public Slider staminaSlider;
+
+    [Header("Crouch")]
+    [SerializeField] private float crouchSpeedMultiplier = 0.55f;
+    [SerializeField] private float crouchHeight = 1.1f;
+    private float standingHeight;
     
     private CharacterController controller;
     private Vector3 velocity;
@@ -27,6 +32,7 @@ public class PlayerController : NetworkBehaviour
 
     public bool MovementEnabled { get; set; } = true;
     public bool IsExhausted { get; private set; }
+    public bool IsCrouched { get; private set; }
     public float CurrentStamina => currentStamina;
 
     [Header("Mobile Joystick (Optional)")]
@@ -36,6 +42,7 @@ public class PlayerController : NetworkBehaviour
     void Start()
     {
         controller = GetComponent<CharacterController>();
+        standingHeight = controller.height;
         currentStamina = maxStamina;
         RefreshStaminaUI();
     }
@@ -74,7 +81,7 @@ public class PlayerController : NetworkBehaviour
         bool sprinting = MovementEnabled && sprintRequested && hasMovementInput && !IsExhausted;
         UpdateStamina(sprinting);
 
-        float currentSpeed = moveSpeed;
+        float currentSpeed = IsCrouched ? moveSpeed * crouchSpeedMultiplier : moveSpeed;
         if (sprinting)
         {
             currentSpeed = sprintSpeed;
@@ -91,6 +98,25 @@ public class PlayerController : NetworkBehaviour
         // Gravity apply karna
         velocity.y += gravity * Time.deltaTime;
         controller.Move(velocity * Time.deltaTime);
+    }
+
+    public void SetCrouched(bool crouched)
+    {
+        IsCrouched = crouched;
+        if (controller == null)
+        {
+            controller = GetComponent<CharacterController>();
+        }
+
+        if (controller != null)
+        {
+            if (standingHeight <= 0f)
+            {
+                standingHeight = controller.height;
+            }
+
+            controller.height = crouched ? Mathf.Min(standingHeight, crouchHeight) : standingHeight;
+        }
     }
 
     private void UpdateStamina(bool sprinting)
