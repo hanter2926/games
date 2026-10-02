@@ -15,6 +15,7 @@ Create `PlayerPrefab` from a root GameObject with these components:
 - NetworkPlayerCombat
 - DeliveryAndHospitalSystem
 - DeliveryImmunitySystem
+- CampCookingSystem
 
 The scripts add required components automatically, but keep exactly one NetworkObject and one NetworkTransform on the root.
 
@@ -42,8 +43,24 @@ Assign `NetworkPlayerCombat.muzzleFlash` to a ParticleSystem under `Muzzle`, and
 
 Assign `DeliveryAndHospitalSystem.hospitalZoneLayer`, configure prices and healing values, and use a `Hospital` layer on clinic trigger colliders. Delivery roles must be assigned by server-side code through `AssignDeliveryBoyServer`.
 
+`CampCookingSystem` gives each player a portable cooking kit by default. Configure vegetarian and non-vegetarian ingredient costs, health, energy, hunger values, and cooking duration. The component consumes `DeliveryAndHospitalSystem.NetworkIngredients`, creates synchronized prepared meals, and shares them only with a same-team player within the configured sharing distance.
+
 Delivery immunity is activated only when a Delivery Boy accepts an order. The server protects the courier from the ordering player and the ordering player's `TeamId` for exactly 60 seconds. Register the prefab with `DeliveryImmunitySystem` and do not apply player damage by directly changing `PlayerSurvival.currentHealth`; use `NetworkPlayer.TryApplyDamageFromPlayerServer` or the existing combat path.
 
 For a delivery vehicle prefab, add a NetworkObject, NetworkTransform, vehicle collider, driver anchor, and an Animator with `Drive` and `Deliver`. A delivery bag can be a child of the player or vehicle; play `Deliver` when `CompleteDelivery` succeeds.
 
 For mobile movement, assign the virtual joystick component to PlayerController.mobileJoystick. The concrete joystick type must match the joystick package installed in the project.
+
+## WildAnimalPrefab
+
+Create a separate registered NGO prefab with:
+
+- NetworkObject
+- NetworkTransform
+- NavMeshAgent
+- WildAnimalAI
+- Collider
+- Visual mesh and Animator
+- Optional AudioSource
+
+Configure `WildAnimalAI` detection radius, attack range, attack cooldown, damage, and target-refresh interval. Add an Animator Trigger named `Attack`. Bake a NavMesh over the map and ensure the animal spawn points are on the baked walkable surface. Register this prefab under NetworkManager > Network Prefabs.

@@ -15,6 +15,7 @@ public sealed class GameHUD : MonoBehaviour
     [SerializeField] private Text moneyText;
     [SerializeField] private Text deliveryStatusText;
     [SerializeField] private Text medicalKitsText;
+    [SerializeField] private Text cookingStatusText;
 
     [Header("Action Buttons")]
     [SerializeField] private Button eatFoodButton;
@@ -30,6 +31,8 @@ public sealed class GameHUD : MonoBehaviour
     [SerializeField] private Button medicalKitButton;
     [SerializeField] private Button acceptDeliveryButton;
     [SerializeField] private Button completeDeliveryButton;
+    [SerializeField] private Button cookVegetarianButton;
+    [SerializeField] private Button cookNonVegetarianButton;
     [SerializeField] private float foodAmount = 50f;
 
     private NetworkPlayer localPlayer;
@@ -39,6 +42,7 @@ public sealed class GameHUD : MonoBehaviour
     private PlayerSocialInteractions localSocial;
     private NetworkPlayerCombat localCombat;
     private DeliveryAndHospitalSystem localDelivery;
+    private CampCookingSystem localCooking;
     private NetworkMatchManager matchManager;
 
     private void OnEnable()
@@ -56,6 +60,8 @@ public sealed class GameHUD : MonoBehaviour
         medicalKitButton?.onClick.AddListener(UseMedicalKit);
         acceptDeliveryButton?.onClick.AddListener(AcceptDelivery);
         completeDeliveryButton?.onClick.AddListener(CompleteDelivery);
+        cookVegetarianButton?.onClick.AddListener(CookVegetarian);
+        cookNonVegetarianButton?.onClick.AddListener(CookNonVegetarian);
     }
 
     private void OnDisable()
@@ -73,6 +79,8 @@ public sealed class GameHUD : MonoBehaviour
         medicalKitButton?.onClick.RemoveListener(UseMedicalKit);
         acceptDeliveryButton?.onClick.RemoveListener(AcceptDelivery);
         completeDeliveryButton?.onClick.RemoveListener(CompleteDelivery);
+        cookVegetarianButton?.onClick.RemoveListener(CookVegetarian);
+        cookNonVegetarianButton?.onClick.RemoveListener(CookNonVegetarian);
         UnbindMatchManager();
     }
 
@@ -157,6 +165,21 @@ public sealed class GameHUD : MonoBehaviour
         localDelivery?.CompleteDelivery();
     }
 
+    public void CookVegetarian()
+    {
+        localCooking?.CookVegetarian();
+    }
+
+    public void CookNonVegetarian()
+    {
+        localCooking?.CookNonVegetarian();
+    }
+
+    public void SharePreparedMeal(ulong teammateClientId)
+    {
+        localCooking?.SharePreparedMealWithPlayer(teammateClientId);
+    }
+
     private void TryBindLocalPlayer()
     {
         NetworkManager networkManager = NetworkManager.Singleton;
@@ -177,6 +200,7 @@ public sealed class GameHUD : MonoBehaviour
         localSocial = localPlayer != null ? localPlayer.GetComponent<PlayerSocialInteractions>() : null;
         localCombat = localPlayer != null ? localPlayer.GetComponent<NetworkPlayerCombat>() : null;
         localDelivery = localPlayer != null ? localPlayer.GetComponent<DeliveryAndHospitalSystem>() : null;
+        localCooking = localPlayer != null ? localPlayer.GetComponent<CampCookingSystem>() : null;
     }
 
     private void TryBindMatchManager()
@@ -237,6 +261,11 @@ public sealed class GameHUD : MonoBehaviour
         if (localDelivery != null && deliveryStatusText != null)
         {
             deliveryStatusText.text = localDelivery.DeliveryStatus.Value.ToString();
+        }
+
+        if (localCooking != null && cookingStatusText != null)
+        {
+            cookingStatusText.text = localCooking.State.Value + " | Meals: " + localCooking.PreparedMealCount.Value;
         }
 
         if (localController != null && staminaSlider != null && localController.maxStamina > 0f)

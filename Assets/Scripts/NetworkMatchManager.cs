@@ -12,6 +12,10 @@ public enum MatchState : byte
 
 public sealed class NetworkMatchManager : NetworkBehaviour
 {
+    public const float TotalBattleDurationSeconds = 22f * 60f;
+    public const float SafeZoneShrinkStartSeconds = 12f * 60f;
+    public const float SafeZoneShrinkDurationSeconds = 10f * 60f;
+
     [System.Serializable]
     private sealed class TeamCamp
     {
@@ -22,8 +26,6 @@ public sealed class NetworkMatchManager : NetworkBehaviour
     [Header("Match Rules")]
     [Min(1)] [SerializeField] private int minimumPlayers = 2;
     [Min(0f)] [SerializeField] private float waitingDuration = 30f;
-    [Min(1f)] [SerializeField] private float battleDuration = 900f;
-    [Min(1f)] [SerializeField] private float safeZoneDuration = 600f;
     [SerializeField] private float initialSafeZoneRadius = 250f;
     [SerializeField] private float finalSafeZoneRadius = 20f;
 
@@ -79,14 +81,14 @@ public sealed class NetworkMatchManager : NetworkBehaviour
                 }
                 break;
             case MatchState.BattleStarted:
-                if (stateElapsed >= battleDuration)
+                if (stateElapsed >= SafeZoneShrinkStartSeconds)
                 {
                     BeginSafeZoneShrink();
                 }
                 break;
             case MatchState.SafeZoneShrinking:
-                SafeZoneRadius.Value = Mathf.Lerp(initialSafeZoneRadius, finalSafeZoneRadius, stateElapsed / safeZoneDuration);
-                if (stateElapsed >= safeZoneDuration)
+                SafeZoneRadius.Value = Mathf.Lerp(initialSafeZoneRadius, finalSafeZoneRadius, stateElapsed / SafeZoneShrinkDurationSeconds);
+                if (stateElapsed >= SafeZoneShrinkDurationSeconds)
                 {
                     EndMatch();
                 }
@@ -118,7 +120,7 @@ public sealed class NetworkMatchManager : NetworkBehaviour
     {
         stateElapsed = 0f;
         CurrentState.Value = MatchState.BattleStarted;
-        StateTimeRemaining.Value = battleDuration;
+        StateTimeRemaining.Value = SafeZoneShrinkStartSeconds;
 
         for (int index = 0; index < players.Count; index++)
         {
@@ -130,7 +132,7 @@ public sealed class NetworkMatchManager : NetworkBehaviour
     {
         stateElapsed = 0f;
         CurrentState.Value = MatchState.SafeZoneShrinking;
-        StateTimeRemaining.Value = safeZoneDuration;
+        StateTimeRemaining.Value = SafeZoneShrinkDurationSeconds;
     }
 
     private void EndMatch()

@@ -58,6 +58,9 @@ For a networked build, only the owning client should read movement and shortcut 
 - `PlayerSocialInteractions.cs`: owner-only input with networked laugh, speak, and wave emotes.
 - `DeliveryAndHospitalSystem.cs`: server-authoritative cooking, purchases, orders, delivery roles, medical kits, hospital treatment, and delivery status.
 - `DeliveryImmunitySystem.cs`: exact 60-second server-time protection for active deliveries.
+- `DayNightCycleManager.cs`: synchronized 9-minute Day/3-minute Night cycle, lighting, and animal spawning.
+- `WildAnimalAI.cs`: server-side night animal targeting, navigation, attacks, and replicated attack effects.
+- `CampCookingSystem.cs`: portable vegetarian/non-vegetarian cooking, prepared meals, and same-team partner sharing.
 - `SafeZoneManager.cs`: shrinking-zone visual and server-side outside-zone damage.
 
 ## 7. NGO package and NetworkManager
@@ -77,7 +80,7 @@ This integration uses **Netcode for GameObjects (NGO)** with Unity Transport.
 
 1. On the scene object containing `NetworkMatchManager`, expand **Team Camps** and create one entry per team.
 2. Give each entry a stable `teamId` and assign its child spawn-point Transforms. Place spawn points inside that team's camp and rotate them toward the play area.
-3. Set `minimumPlayers`, `waitingDuration`, `battleDuration`, and `safeZoneDuration`. The manager enters `BattleStarted` when the minimum is reached or the waiting timer expires, then enters `SafeZoneShrinking`, and finally `MatchEnded`.
+3. Set `minimumPlayers` and `waitingDuration`. Match timing is enforced by `NetworkMatchManager`: 720 seconds of BattleStarted followed by 600 seconds of SafeZoneShrinking, for exactly 1,320 seconds (22 minutes) total. The manager then enters `MatchEnded`.
 4. At registration and again when battle starts, each player is assigned to a camp using round-robin team assignment. Replace `RegisterPlayer` assignment with authenticated party/team data if matchmaking already knows a player's team.
 5. The `SafeZoneRadius` NetworkVariable is replicated for a zone visual or damage system. `NetworkMatchManager` does not apply zone damage itself; have a server-only zone component consume that value and damage players outside the radius.
 
@@ -156,6 +159,24 @@ This integration uses **Netcode for GameObjects (NGO)** with Unity Transport.
 4. `NetworkPlayerCombat` calls `TryApplyDamageFromPlayerServer` before applying player damage. The courier rejects damage from the ordering client and any attacker with the protected team ID. The shot can still play its normal fire animation, but it is not treated as a successful hit and does not produce a hit marker.
 5. Safe-zone, starvation, and other non-player damage continue to work because they use the environment-only `ApplyDamageServer` path.
 6. Immunity ends on successful delivery, expiry, courier/recipient disconnect, or server cleanup. `NetworkRemainingSeconds` and `NetworkIsImmune` can drive a HUD countdown or courier icon.
+
+## 17. Day/night and wild animal setup
+
+1. Register `WildAnimalPrefab` in NetworkManager > Network Prefabs. It needs NetworkObject, NetworkTransform, NavMeshAgent, WildAnimalAI, a collider, visual mesh, and an Animator with an `Attack` Trigger.
+2. Bake a NavMesh over the BattleScene. Animal spawn points must be on walkable NavMesh areas and should be distributed across the map and near camps.
+3. Add `DayNightCycleManager` and NetworkObject to a persistent BattleScene object. Assign the directional Light, WildAnimalPrefab, map spawn points, camp spawn points, and `animalsPerNight`.
+4. The server advances exactly 540 seconds of Day and 180 seconds of Night once the match reaches BattleStarted. This 12-minute cycle continues through the 22-minute match; during Night it darkens each client's lighting, spawns animals, and allows animals to target players. At the next Day transition or MatchEnded it despawns remaining animals.
+5. Animals prefer nearby players outside camps, but can attack any living player within detection range. Their attacks use `ApplyDamageServer`, so delivery immunity correctly protects only against player-originated damage, not wildlife, starvation, or safe-zone damage.
+
+## 18. Portable camp cooking setup
+
+1. Add `CampCookingSystem` to PlayerPrefab. `NetworkPlayer` requires it automatically.
+2. Leave `startsWithPortableCookingKit` enabled so every player carries a kit outside, at a tent house, or at a camp. The server controls the synchronized `HasPortableCookingKit` state.
+3. Configure vegetarian and non-vegetarian ingredient costs and health/energy/hunger restoration values. Use `GatherIngredients` from a server-validated pickup or resource interaction.
+4. Add Cook Vegetarian and Cook Non-Vegetarian buttons to the GameHUD and assign them to `GameHUD.cookVegetarianButton` and `cookNonVegetarianButton`. Add a text field to `GameHUD.cookingStatusText`.
+5. Cooking consumes ingredients, takes the configured preparation time, and adds one synchronized prepared meal. It never edits another player's health from the client.
+6. Build a teammate/partner selection UI from spawned NetworkPlayers. Pass the selected teammate's `OwnerClientId` to `GameHUD.SharePreparedMeal(clientId)`. The server validates connected status, same TeamId, and sharing distance before applying recipe benefits.
+7. A shared meal restores the recipient's health, energy, and hunger through `PlayerSurvival`; it is not blocked by the delivery immunity rule because it is a beneficial teammate action.
 
 ## 15. Safe zone and guard alert setup
 
