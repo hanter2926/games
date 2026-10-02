@@ -211,6 +211,17 @@ public class PlayerSurvival : NetworkBehaviour
         RefreshUI();
     }
 
+    public void ApplyWeatherExposureServer(float energyDrain)
+    {
+        if (!IsServer || energyDrain <= 0f)
+        {
+            return;
+        }
+
+        currentEnergy = Mathf.Max(0f, currentEnergy - energyDrain);
+        SyncNetworkState();
+    }
+
     private void OnNetworkHealthChanged(float previousValue, float newValue)
     {
         currentHealth = newValue;

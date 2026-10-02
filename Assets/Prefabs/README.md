@@ -18,6 +18,7 @@ Create `PlayerPrefab` from a root GameObject with these components:
 - CampCookingSystem
 - PlayerSessionManager
 - PlayerProgression
+- PlayerInventory
 
 The scripts add required components automatically, but keep exactly one NetworkObject and one NetworkTransform on the root.
 
@@ -52,6 +53,8 @@ Assign `DeliveryAndHospitalSystem.hospitalZoneLayer`, configure prices and heali
 Delivery immunity is activated only when a Delivery Boy accepts an order. The server protects the courier from the ordering player and the ordering player's `TeamId` for exactly 60 seconds. Register the prefab with `DeliveryImmunitySystem` and do not apply player damage by directly changing `PlayerSurvival.currentHealth`; use `NetworkPlayer.TryApplyDamageFromPlayerServer` or the existing combat path.
 
 For a delivery vehicle prefab, add a NetworkObject, NetworkTransform, vehicle collider, driver anchor, and an Animator with `Drive` and `Deliver`. A delivery bag can be a child of the player or vehicle; play `Deliver` when `CompleteDelivery` succeeds.
+
+Use `NetworkVehicle` on the vehicle root. Set its type to `DeliveryVan` for Delivery Boy vehicles. Add `DriverSeat` and `ExitPoint` child Transforms and register the vehicle prefab with NetworkManager > Network Prefabs.
 
 For mobile movement, assign the virtual joystick component to PlayerController.mobileJoystick. The concrete joystick type must match the joystick package installed in the project.
 

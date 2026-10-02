@@ -31,6 +31,15 @@ Create these scenes in the Unity Editor and add both to Build Settings:
 14. Keep the gameplay scene in the NGO Scene Management list. The host loads it when NetworkMatchManager enters BattleStarted; clients follow automatically.
 Do not place a second NetworkManager or a second persistent NetworkMatchManager in BattleScene. The bootstrap manager persists across the NGO scene transition.
 
+## Final polish objects
+
+1. Add `DynamicWeatherManager` and `NetworkObject` to BattleScene. Assign the DayNightCycleManager and a rain ParticleSystem; configure fog and survival exposure.
+2. Add registered VehiclePrefab and DeliveryVanPrefab instances near roads and the Delivery Hub. Assign DriverSeat and ExitPoint; DeliveryVan requires the Delivery Boy role.
+3. Add `PlayerInventory` to PlayerPrefab and register food, ingredient, medical kit, weapon, ammunition, and supply item interactions through server methods.
+4. Add `KillFeedUI` to the gameplay Canvas with a feed Text.
+5. Add `MatchResultsUI` with a ResultsPanel containing WinnerText, MvpText, and ScoreboardText.
+6. Add MatchKillsText to GameHUD for the replicated match kill counter.
+
 ## Main menu dashboard
 
 1. Add `MainMenuUIController` to the menu Canvas or dashboard root alongside `MainMenuManager`.

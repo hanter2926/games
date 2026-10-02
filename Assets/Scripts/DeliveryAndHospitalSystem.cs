@@ -87,10 +87,12 @@ public sealed class DeliveryAndHospitalSystem : NetworkBehaviour
     private static readonly Dictionary<int, DeliveryOrder> serverOrders = new();
     private static int nextOrderId = 1;
     private PlayerSurvival survival;
+    private PlayerInventory inventory;
 
     private void Awake()
     {
         survival = GetComponent<PlayerSurvival>();
+        inventory = GetComponent<PlayerInventory>();
     }
 
     public override void OnNetworkSpawn()
@@ -138,6 +140,7 @@ public sealed class DeliveryAndHospitalSystem : NetworkBehaviour
     private void GatherIngredientsServerRpc(int amount)
     {
         NetworkIngredients.Value = Mathf.Min(999, NetworkIngredients.Value + amount);
+        inventory?.AddItemServer(InventoryItemType.VegetarianIngredient, amount);
         SetStatus("Ingredients gathered");
     }
 
@@ -440,12 +443,15 @@ public sealed class DeliveryAndHospitalSystem : NetworkBehaviour
         {
             case DeliveryItemType.CookedMeal:
                 survival.ConsumeFoodServer(mealHungerRestored, mealEnergyRestored);
+                inventory?.AddItemServer(InventoryItemType.Food, 1);
                 break;
             case DeliveryItemType.MedicalKit:
                 survival.AddMedicalKitsServer(1);
+                inventory?.AddItemServer(InventoryItemType.MedicalKit, 1);
                 break;
             case DeliveryItemType.GeneralSupplies:
                 NetworkSupplies.Value = Mathf.Min(999, NetworkSupplies.Value + 1);
+                inventory?.AddItemServer(InventoryItemType.GeneralSupply, 1);
                 break;
         }
     }

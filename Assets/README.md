@@ -53,6 +53,10 @@ For a networked build, only the owning client should read movement and shortcut 
 - `PlayerProgression.cs`: server-authoritative XP, levels, ranks, kills, deliveries, matches, and survival time.
 - `KillFeedUI.cs`: timed elimination feed driven by the replicated match message.
 - `MainMenuUIController.cs`: profile dashboard, mode/map controls, settings, store/inventory events, and Play/Host/Join UI.
+- `NetworkVehicle.cs`: server-authoritative standard and Delivery Boy vehicle driving.
+- `PlayerInventory.cs`: synchronized stack-based food, ingredients, medical, weapon, ammunition, and supply slots.
+- `DynamicWeatherManager.cs`: synchronized rain/fog/storm effects and survival exposure.
+- `MatchResultsUI.cs`: replicated winner, MVP, kills, survival, and delivery scoreboard.
 
 ## 7. NGO package and NetworkManager
 

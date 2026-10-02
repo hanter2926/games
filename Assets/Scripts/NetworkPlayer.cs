@@ -11,7 +11,8 @@ using UnityEngine;
 [RequireComponent(typeof(DeliveryImmunitySystem))]
 [RequireComponent(typeof(CampCookingSystem))]
 [RequireComponent(typeof(PlayerSessionManager))]
-[RequireComponent(typeof(PlayerProgression))]
+    [RequireComponent(typeof(PlayerProgression))]
+    [RequireComponent(typeof(PlayerInventory))]
 public sealed class NetworkPlayer : NetworkBehaviour
 {
     [Header("Local Components")]
@@ -19,6 +20,9 @@ public sealed class NetworkPlayer : NetworkBehaviour
     [SerializeField] private PlayerSurvival survival;
     [SerializeField] private PlayerCampGuard campGuard;
     [SerializeField] private PlayerProgression progression;
+    private NetworkVehicle currentVehicle;
+
+    public bool IsInVehicle => currentVehicle != null;
 
     [Header("Network State")]
     public NetworkVariable<bool> NetworkOnGuardDuty = new(false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
@@ -141,6 +145,20 @@ public sealed class NetworkPlayer : NetworkBehaviour
         if (spawnPoint != null)
         {
             transform.SetPositionAndRotation(spawnPoint.position, spawnPoint.rotation);
+        }
+    }
+
+    public void SetVehicleServer(NetworkVehicle vehicle, bool seated)
+    {
+        if (!IsServer)
+        {
+            return;
+        }
+
+        currentVehicle = seated ? vehicle : null;
+        if (controller != null)
+        {
+            controller.MovementEnabled = !seated;
         }
     }
 

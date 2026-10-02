@@ -12,6 +12,31 @@ public enum MatchState : byte
     MatchEnded
 }
 
+    public struct MatchResultEntry : INetworkSerializable, System.IEquatable<MatchResultEntry>
+    {
+        public FixedString64Bytes playerName;
+        public int kills;
+        public int deliveries;
+        public float survivalSeconds;
+        public bool isWinner;
+        public bool isMvp;
+
+        public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter
+        {
+            serializer.SerializeValue(ref playerName);
+            serializer.SerializeValue(ref kills);
+            serializer.SerializeValue(ref deliveries);
+            serializer.SerializeValue(ref survivalSeconds);
+            serializer.SerializeValue(ref isWinner);
+            serializer.SerializeValue(ref isMvp);
+        }
+
+        public bool Equals(MatchResultEntry other)
+        {
+            return playerName.Equals(other.playerName) && kills == other.kills && deliveries == other.deliveries && Mathf.Approximately(survivalSeconds, other.survivalSeconds) && isWinner == other.isWinner && isMvp == other.isMvp;
+        }
+    }
+
 public sealed class NetworkMatchManager : NetworkBehaviour
 {
     public const int MaximumPlayers = 80;
@@ -60,11 +85,20 @@ public sealed class NetworkMatchManager : NetworkBehaviour
         NetworkVariableWritePermission.Server);
     public NetworkVariable<int> MatchKillCount = new(0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
     public NetworkVariable<FixedString128Bytes> LastEliminationMessage = new(default, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+    public NetworkVariable<bool> ResultsReady = new(false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+    public NetworkVariable<FixedString64Bytes> WinnerName = new(default, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+    public NetworkVariable<FixedString64Bytes> MvpName = new(default, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+    public NetworkList<MatchResultEntry> MatchResults { get; private set; }
 
     private readonly List<NetworkPlayer> players = new(MaximumPlayers);
     private readonly Dictionary<string, ReturningProfile> returningProfiles = new(StringComparer.OrdinalIgnoreCase);
     private float stateElapsed;
     private float matchElapsed;
+
+    private void Awake()
+    {
+        MatchResults = new NetworkList<MatchResultEntry>();
+    }
 
     public int ActivePlayerCount => players.Count;
     public IReadOnlyList<NetworkPlayer> ActivePlayers => players;
@@ -84,6 +118,9 @@ public sealed class NetworkMatchManager : NetworkBehaviour
         MatchTimeRemaining.Value = 0f;
         MatchKillCount.Value = 0;
         LastEliminationMessage.Value = new FixedString128Bytes(string.Empty);
+        ResultsReady.Value = false;
+        WinnerName.Value = new FixedString64Bytes(string.Empty);
+        MvpName.Value = new FixedString64Bytes(string.Empty);
     }
 
     private void Update()
@@ -281,6 +318,85 @@ public sealed class NetworkMatchManager : NetworkBehaviour
     {
         CurrentState.Value = MatchState.MatchEnded;
         StateTimeRemaining.Value = 0f;
+        BuildMatchResultsServer();
+    }
+
+    public override void OnNetworkDespawn()
+    {
+        MatchResults?.Dispose();
+    }
+
+    private void BuildMatchResultsServer()
+    {
+        if (!IsServer)
+        {
+            return;
+        }
+
+        List<MatchResultEntry> results = new();
+        NetworkPlayer winner = null;
+        NetworkPlayer mvp = null;
+        float bestMvpScore = float.MinValue;
+
+        foreach (NetworkPlayer player in players)
+        {
+            if (player == null)
+            {
+                continue;
+            }
+
+            PlayerProgression progression = player.GetComponent<PlayerProgression>();
+            PlayerSurvival survival = player.GetComponent<PlayerSurvival>();
+            int kills = progression != null ? progression.Kills.Value : 0;
+            int deliveries = progression != null ? progression.DeliveriesCompleted.Value : 0;
+            float survivalSeconds = progression != null ? progression.SurvivalSeconds.Value : 0f;
+            bool alive = survival == null || !survival.NetworkIsDowned.Value;
+            float score = (alive ? 1000000f : 0f) + kills * 1000f + deliveries * 100f + survivalSeconds;
+            if (mvp == null || score > bestMvpScore)
+            {
+                bestMvpScore = score;
+                mvp = player;
+            }
+
+            if (alive && (winner == null || kills > winner.GetComponent<PlayerProgression>().Kills.Value))
+            {
+                winner = player;
+            }
+
+            results.Add(new MatchResultEntry
+            {
+                playerName = new FixedString64Bytes(GetPlayerDisplayName(player)),
+                kills = kills,
+                deliveries = deliveries,
+                survivalSeconds = survivalSeconds
+            });
+        }
+
+        if (winner == null)
+        {
+            winner = mvp;
+        }
+
+        string winnerName = winner != null ? GetPlayerDisplayName(winner) : "No winner";
+        string mvpName = mvp != null ? GetPlayerDisplayName(mvp) : "No MVP";
+        WinnerName.Value = new FixedString64Bytes(winnerName);
+        MvpName.Value = new FixedString64Bytes(mvpName);
+
+        for (int index = 0; index < results.Count; index++)
+        {
+            MatchResultEntry result = results[index];
+            result.isWinner = result.playerName.ToString() == winnerName;
+            result.isMvp = result.playerName.ToString() == mvpName;
+            results[index] = result;
+        }
+
+        MatchResults.Clear();
+        foreach (MatchResultEntry result in results)
+        {
+            MatchResults.Add(result);
+        }
+
+        ResultsReady.Value = true;
     }
 
     private void AssignTeamAndSpawn(NetworkPlayer player, int playerIndex)
